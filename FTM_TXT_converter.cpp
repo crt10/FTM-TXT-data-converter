@@ -67,12 +67,14 @@ struct Pattern {
 };
 
 int calculateTicksPerRow(int tempo, int speed);
-void processRows(ofstream& output, vector<Row*>* rows, int channel, int speed);
-void calculateDelay(ofstream& output, int delay, int speed);
+void processRows(ofstream& output, vector<Row*>* rows, int channel, int speed, int numOfRows);
+void calculateDelay(ofstream& output, int delay, int speed, int numOfRows);
+void generateNoteTable(ofstream& output);
 
 int main() {
-	string fileName = "Touhou 6 - Shanghai Teahouse -Chinise Tea-.txt";
+	string fileName = "test.txt";
 	ifstream file(fileName); //some .txt files won't read properly without, ios::binary
+	ofstream output(fileName.substr(0, fileName.size() - 4) + "_OUTPUT.txt", std::ofstream::out | std::ofstream::trunc);
 
 	if (file.fail()) {
 		cout << "Error: Could not open the text file" << endl;
@@ -207,9 +209,11 @@ int main() {
 		ss >> data;
 		if (data == "TRACK") {
 			songNumber++;
+
 			//TIMING DATA
-			ss >> data;
-			if (stoi(data) > MAX_ROWS) {
+			int numOfRows;
+			ss >> numOfRows;
+			if (numOfRows > MAX_ROWS) {
 				//This shouldn't ever be a problem because famitracker only allows up to 255 rows anyway.
 				cout << "WARNING: More than " << MAX_ROWS << " rows per pattern. Rows above 255 will be ignored." << endl;
 			}
@@ -343,7 +347,6 @@ int main() {
 			//}
 
 			//PROCESS ALL TRACK DATA FOR OUTPUT
-			ofstream output(fileName.substr(0, fileName.size()-4) + "_OUTPUT.txt", std::ofstream::out | std::ofstream::trunc);
 			//vector<vector<int>> channelsUsedPatterns;
 			vector<int> channelsUsedPatterns[MAX_CHANNELS];
 			
@@ -372,13 +375,14 @@ int main() {
 				output << "song" << songNumber << "_channel" << i << "_patterns:" << endl;
 				for (int pattern = 0; pattern < channelsUsedPatterns[i].size(); pattern++) {
 					output << "\tsong" << songNumber << "_channel" << i << "_pattern" << channelsUsedPatterns[i][pattern] << ": .dw ";
-					processRows(output, &patterns[channelsUsedPatterns[i][pattern]]->rows, 0, speed);
+					processRows(output, &patterns[channelsUsedPatterns[i][pattern]]->rows, i, speed, numOfRows);
 					output << dec;
 				}
 				output << endl;
 			}
 		}
 	}
+	generateNoteTable(output);
 	cout << "Process complete" << endl;
 }
 
@@ -390,48 +394,77 @@ int calculateTicksPerRow(int tempo, int ticksPerRow) {
 	return multiplierTempo * ticksPerRow;
 }
 
-void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed) {
-	output << setfill('0') << setw(2) << hex;
+void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, int numOfRows) {
+	output << hex;
 	int delay = 0;
 	for (int row = 0; row < rows->size(); row++) {
 		int noteNum = -1;
-		if (NOTES.count(rows->at(row)->channels.at(0)->note) == -1) {
-			cout << "WARNING: Notes must range between C-0 to B-7. A note higher than larger B-7 was found and will be ignored.";
+		if (NOTES.find(rows->at(row)->channels.at(channel)->note) == NOTES.end()) {
+			cout << "WARNING: Notes must range between C-0 to B-7. A note higher than larger B-7 was found and will be ignored." << endl;
 		}
 		else {
-			noteNum = NOTES.at(rows->at(row)->channels.at(0)->note);
+			noteNum = NOTES.at(rows->at(row)->channels.at(channel)->note);
 		}
 
 		if (noteNum == -1) {
-			delay++;
+
 		}
 		else if (noteNum == -2) { //"---" silences the channel
-			output << "0x" << VOLUME_LEVELS::Zero << ", ";
-			delay++;
+			output << "0x" << setfill('0') << setw(2) << VOLUME_LEVELS::Zero << ", ";
 		}
 		else {
 			if (delay != 0) {
-				calculateDelay(output, delay, speed);
-				output << ", ";
+				calculateDelay(output, delay, speed, numOfRows);
 				delay = 0;
 			}
-			output << "0x" << setfill('0') << setw(2) << hex << noteNum;
-			if (row != rows->size() - 1) {
+			output << "0x" << setfill('0') << setw(2) << noteNum << ", ";
+		}
+		delay++;
+	}
+	if (delay != 0) {
+		calculateDelay(output, delay, speed, numOfRows);
+	}
+	output << "0xFF" << endl; //end of row pattern flag
+}
+
+void calculateDelay(ofstream& output, int delay, int speed, int numOfRows) {
+	int numOfCycles = delay * speed - 1; //this is the number of NES frame sequences to wait. NES frame sequencer clocks at 60Hz (NTSC)
+	numOfCycles += VOLUME_LEVELS::Fifteen; //delay levels must range between the highest volume level (0x66) and the instrument flag (0xE4)
+	for (numOfCycles; numOfCycles >= 0xE4; numOfCycles -= (0xE4-VOLUME_LEVELS::Fifteen)) {
+		output << "0xE3, ";
+	}
+	output << "0x" << setfill('0') << setw(2) << hex << numOfCycles << ", ";
+}
+
+void generateNoteTable(ofstream& output) {
+	double a = 27.5;
+	double ratio = pow(2.0, 1.0 / 12.0);
+
+	output << "note_table: " << endl;
+	output << "\t.dw ";
+	for (int i = 0; i < 3; i++) {
+		double frequency = a * pow(ratio, i);
+		int timerPeriod = round(11.1746014718 * ((1789773.0) / (16 * frequency)));
+		output << "0x" << setfill('0') << setw(4) << hex << timerPeriod;
+		if (i != 2) {
+			output << ", ";
+		}
+	}
+	output << endl;
+
+	for (int i = 1; i <= 7; i++) {
+		output << "\t.dw ";
+		for (int i = 3; i < 15; i++) {
+			if (i == 12) {
+				a *= 2;
+			}
+			double frequency = a * pow(ratio, i%12);
+			int timerPeriod = round(11.1746014718 * ((1789773.0) / (16 * frequency)));
+			output << "0x" << setfill('0') << setw(4) << hex << timerPeriod;
+			if (i != 14) {
 				output << ", ";
 			}
 		}
+		output << endl;
 	}
-	if (delay != 0) {
-		calculateDelay(output, delay, speed);
-	}
-	output << endl;
-}
-
-void calculateDelay(ofstream& output, int delay, int speed) {
-	int numOfCycles = (delay * speed) + (speed - 1); //this is the number of NES frame sequences to wait. NES frame sequencer clocks at 60Hz (NTSC)
-	numOfCycles += VOLUME_LEVELS::Fifteen; //delay levels must range between the highest volume level (0x66) and the instrument flag (0xE5)
-	for (numOfCycles; numOfCycles > 0xE4; numOfCycles -= (0xE4-VOLUME_LEVELS::Fifteen)) {
-		output << "0xE4, ";
-	}
-	output << "0x" << numOfCycles;
 }
