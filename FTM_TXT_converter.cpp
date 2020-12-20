@@ -18,7 +18,7 @@ const unordered_map<string, int> NOTES = {
 	{"C-5", 0x33}, {"C#5", 0x34}, {"D-5", 0x35}, {"D#5", 0x36}, {"E-5", 0x37}, {"F-5", 0x38}, {"F#5", 0x39}, {"G-5", 0x3A}, {"G#5", 0x3B}, {"A-5", 0x3C}, {"A#5", 0x3D}, {"B-5", 0x3E},
 	{"C-6", 0x3F}, {"C#6", 0x40}, {"D-6", 0x41}, {"D#6", 0x42}, {"E-6", 0x43}, {"F-6", 0x44}, {"F#6", 0x45}, {"G-6", 0x46}, {"G#6", 0x47}, {"A-6", 0x48}, {"A#6", 0x49}, {"B-6", 0x4A},
 	{"C-7", 0x4B}, {"C#7", 0x4C}, {"D-7", 0x4D}, {"D#7", 0x4E}, {"E-7", 0x4F}, {"F-7", 0x50}, {"F#7", 0x51}, {"G-7", 0x52}, {"G#7", 0x53}, {"A-7", 0x54}, {"A#7", 0x55}, {"B-7", 0x56},
-	{"...", -1}, {"---", -2}
+	{"...", -1},  {"---", -2}
 };
 
 enum VOLUME_LEVELS {
@@ -26,7 +26,7 @@ enum VOLUME_LEVELS {
 };
 
 const int MAX_CHANNELS = 5;
-const int MAX_FRAMES = 255 / MAX_CHANNELS; //255 is the largest value 8-bits can hold. We only use 8-bits for the offsets in the sound driver.
+const int MAX_FRAMES = (pow(2, 16)-1)/2 / MAX_CHANNELS; //we are using 16 bytes for offsetting frames. since we are grabbing byte data, we must *2 in avr, which gives us half the maximum number of offsets
 const int MAX_ROWS = 255;
 
 struct Macro {
@@ -67,12 +67,12 @@ struct Pattern {
 };
 
 int calculateTicksPerRow(int tempo, int speed);
-void processRows(ofstream& output, vector<Row*>* rows, int channel, int speed, int numOfRows);
+void processRows(ofstream& output, vector<Row*>* rows, int channel, int speed, int numOfRows, int* prevVolume, int* volume);
 void calculateDelay(ofstream& output, int delay, int speed, int numOfRows);
 void generateNoteTable(ofstream& output);
 
 int main() {
-	string fileName = "test.txt";
+	string fileName = "Touhou 6 - Shanghai Teahouse -Chinise Tea-.txt";
 	ifstream file(fileName); //some .txt files won't read properly without, ios::binary
 	ofstream output(fileName.substr(0, fileName.size() - 4) + "_OUTPUT.txt", std::ofstream::out | std::ofstream::trunc);
 
@@ -347,10 +347,9 @@ int main() {
 			//}
 
 			//PROCESS ALL TRACK DATA FOR OUTPUT
-			//vector<vector<int>> channelsUsedPatterns;
 			vector<int> channelsUsedPatterns[MAX_CHANNELS];
-			
-			output << "song" << songNumber << "_frames:" << endl;
+
+			output << "song" << songNumber << "_frames:" << endl; //song frames
 			for (int frame = 0; frame < (MAX_FRAMES>frames.size() ? frames.size() : MAX_FRAMES); frame++) {
 				output << "\t.dw ";
 				for (int i = 0; i < MAX_CHANNELS; i++) {
@@ -366,16 +365,19 @@ int main() {
 			}
 			output << endl;
 			
-			for (int i = 0; i < MAX_CHANNELS; i++) {
+			for (int i = 0; i < MAX_CHANNELS; i++) { //filter any unused patterns
 				sort(channelsUsedPatterns[i].begin(), channelsUsedPatterns[i].end());
 				channelsUsedPatterns[i].erase(unique(channelsUsedPatterns[i].begin(), channelsUsedPatterns[i].end()), channelsUsedPatterns[i].end());
 			}
 			
-			for (int i = 0; i < MAX_CHANNELS; i++) {
+			for (int i = 0; i < MAX_CHANNELS; i++) { //pattern data
 				output << "song" << songNumber << "_channel" << i << "_patterns:" << endl;
+				int prevVolume = -1; //-1 represents a silenced channel
+				int volume = 15;
 				for (int pattern = 0; pattern < channelsUsedPatterns[i].size(); pattern++) {
+					cout << volume << endl;
 					output << "\tsong" << songNumber << "_channel" << i << "_pattern" << channelsUsedPatterns[i][pattern] << ": .dw ";
-					processRows(output, &patterns[channelsUsedPatterns[i][pattern]]->rows, i, speed, numOfRows);
+					processRows(output, &patterns[channelsUsedPatterns[i][pattern]]->rows, i, speed, numOfRows, &prevVolume, &volume);
 					output << dec;
 				}
 				output << endl;
@@ -394,30 +396,59 @@ int calculateTicksPerRow(int tempo, int ticksPerRow) {
 	return multiplierTempo * ticksPerRow;
 }
 
-void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, int numOfRows) {
+void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, int numOfRows, int *prevVolume, int* volume) {
 	output << hex;
+	int noteNum = -1;
 	int delay = 0;
-	for (int row = 0; row < rows->size(); row++) {
-		int noteNum = -1;
-		if (NOTES.find(rows->at(row)->channels.at(channel)->note) == NOTES.end()) {
+	int prevVol = *prevVolume;
+	int vol = *volume;
+	for (int row = 0; row < rows->size(); row++) { //loop through each row
+		if (NOTES.find(rows->at(row)->channels.at(channel)->note) == NOTES.end()) { //get note data
 			cout << "WARNING: Notes must range between C-0 to B-7. A note higher than larger B-7 was found and will be ignored." << endl;
 		}
 		else {
 			noteNum = NOTES.at(rows->at(row)->channels.at(channel)->note);
 		}
-
-		if (noteNum == -1) {
-
+		if (rows->at(row)->channels.at(channel)->volume != ".") { //get volume data
+			if (vol != -1) {
+				vol = stoi(rows->at(row)->channels.at(channel)->volume, NULL, 16);
+			}
+			else { //if the channel is silenced, only change the prevVol value. vol has to stay -1 in order to represent a silenced channel.
+				prevVol = stoi(rows->at(row)->channels.at(channel)->volume, NULL, 16);
+			}
 		}
-		else if (noteNum == -2) { //"---" silences the channel
-			output << "0x" << setfill('0') << setw(2) << VOLUME_LEVELS::Zero << ", ";
+
+		if (noteNum != -1) {
+			if (noteNum == -2) { //output processed note data
+				if (delay != 0) {
+					calculateDelay(output, delay, speed, numOfRows);
+					delay = 0;
+				}
+				if (vol != -1) { //if the channel is not silenced, silence the channel and store the most recent volume level in the pattern
+					prevVol = vol;
+					vol = -1; //-1 represents a silenced channel
+				}
+				output << "0x" << setfill('0') << setw(2) << VOLUME_LEVELS::Zero << ", "; //"---" silences the channel
+			}
+			else {
+				if (delay != 0) {
+					calculateDelay(output, delay, speed, numOfRows);
+					delay = 0;
+				}
+				if (vol == -1) { //if the channel was silenced, unsilence the channel and use the most recent volume level in the pattern
+					vol = prevVol;
+					prevVol = -1;
+				}
+				output << "0x" << setfill('0') << setw(2) << noteNum << ", ";
+			}
 		}
-		else {
+		if (prevVol != vol && vol != -1) { //output volume data
 			if (delay != 0) {
 				calculateDelay(output, delay, speed, numOfRows);
 				delay = 0;
 			}
-			output << "0x" << setfill('0') << setw(2) << noteNum << ", ";
+			prevVol = vol;
+			output << "0x" << setfill('0') << setw(2) << vol + VOLUME_LEVELS::Zero << ", ";
 		}
 		delay++;
 	}
@@ -425,10 +456,12 @@ void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, i
 		calculateDelay(output, delay, speed, numOfRows);
 	}
 	output << "0xFF" << endl; //end of row pattern flag
+	*prevVolume = prevVol;
+	*volume = vol;
 }
 
 void calculateDelay(ofstream& output, int delay, int speed, int numOfRows) {
-	int numOfCycles = delay * speed - 1; //this is the number of NES frame sequences to wait. NES frame sequencer clocks at 60Hz (NTSC)
+	int numOfCycles = delay * speed; //this is the number of NES frame sequences to wait. NES frame sequencer clocks at 60Hz (NTSC)
 	numOfCycles += VOLUME_LEVELS::Fifteen; //delay levels must range between the highest volume level (0x66) and the instrument flag (0xE4)
 	for (numOfCycles; numOfCycles >= 0xE4; numOfCycles -= (0xE4-VOLUME_LEVELS::Fifteen)) {
 		output << "0xE3, ";
