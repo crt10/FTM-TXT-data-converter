@@ -1,6 +1,7 @@
 #include <fstream>
 #include <iostream>
 #include <iomanip>
+#include <bitset>
 #include <sstream>
 #include <string>
 #include <map>
@@ -25,15 +26,16 @@ enum VOLUME_LEVELS {
 	Zero = 0x57, One, Two, Three, Four, Five, Six, Seven, Eight, Nine, Ten, Eleven, Twelve, Thirteen, Fourteen, Fifteen //Fifteen == 0x66, if Zero == 0x57
 };
 
+const int MAX_INSTRUMENTS = 255;
 const int MAX_CHANNELS = 5;
 const int MAX_FRAMES = (pow(2, 16)-1)/2 / MAX_CHANNELS; //we are using 16 bytes for offsetting frames. since we are grabbing byte data, we must *2 in avr, which gives us half the maximum number of offsets
 const int MAX_ROWS = 255;
 
 struct Macro {
-	int loop = -1;
-	int unknown = -1;
-	int mode = -1;
-	vector<int> values;
+	uint8_t loop = -1;
+	uint8_t unknown = -1;
+	uint8_t mode = -1;
+	vector<uint8_t> values;
 };
 
 struct Instrument {
@@ -69,12 +71,15 @@ struct Pattern {
 int calculateTicksPerRow(int tempo, int speed);
 void processRows(ofstream& output, vector<Row*>* rows, int channel, int speed, int numOfRows, int* prevVolume, int* volume);
 void calculateDelay(ofstream& output, int delay, int speed, int numOfRows);
+int findMacroIndex(map<int, Macro*>* macros, Macro* macroTarget);
+void processMacros(ofstream& output, map<int, Macro*>* macros, int macroType);
 void generateNoteTable(ofstream& output);
 
 int main() {
 	string fileName = "Touhou 6 - Shanghai Teahouse -Chinise Tea-.txt";
 	ifstream file(fileName); //some .txt files won't read properly without, ios::binary
 	ofstream output(fileName.substr(0, fileName.size() - 4) + "_OUTPUT.txt", std::ofstream::out | std::ofstream::trunc);
+	generateNoteTable(output);
 
 	if (file.fail()) {
 		cout << "Error: Could not open the text file" << endl;
@@ -124,12 +129,11 @@ int main() {
 			break;
 		}
 		int id, loop, unknown, mode;
-		vector<int> values;
-		ss >> id >> loop >> unknown >> mode >> data >> data;
-		do {
+		vector<uint8_t> values;
+		ss >> id >> loop >> unknown >> mode >> data;
+		while (ss >> data) {
 			values.push_back(stoi(data));
-			ss >> data;
-		} while (!ss.eof());
+		}
 
 		Macro* macro = new Macro;
 		macro->loop = loop;
@@ -160,6 +164,9 @@ int main() {
 		string data;
 		ss >> data;
 		if (data != "INST2A03") {
+			if (data != "") {
+				cout << "WARNING: Non-INST2A03 instrument found and will be ignored." << endl;
+			}
 			break;
 		}
 
@@ -181,7 +188,13 @@ int main() {
 		if (dutyMacros.count(dutyID) != 0) {
 			instrument->duty = dutyMacros.at(dutyID);
 		}
-		instruments.insert({ id, instrument });
+		if (instruments.size() > MAX_INSTRUMENTS) {
+			cout << "ERROR: More than " << MAX_INSTRUMENTS << " instruments detected. Tip: Delete any unused instruments in Edit > Clean up." << endl;
+			exit(1);
+		}
+		else {
+			instruments.insert({ id, instrument });
+		}
 	}
 
 	//z = 0;
@@ -315,7 +328,9 @@ int main() {
 								channel->fx1 = fx1;
 								row->channels.push_back(channel);
 							}
-							pattern->rows.push_back(row);
+							if (pattern->rows.size() < MAX_ROWS) {
+								pattern->rows.push_back(row);
+							}
 						}
 						else if (data == "PATTERN" || data == "TRACK") {
 							file.seekg(prevLine);
@@ -375,7 +390,6 @@ int main() {
 				int prevVolume = -1; //-1 represents a silenced channel
 				int volume = 15;
 				for (int pattern = 0; pattern < channelsUsedPatterns[i].size(); pattern++) {
-					cout << volume << endl;
 					output << "\tsong" << songNumber << "_channel" << i << "_pattern" << channelsUsedPatterns[i][pattern] << ": .dw ";
 					processRows(output, &patterns[channelsUsedPatterns[i][pattern]]->rows, i, speed, numOfRows, &prevVolume, &volume);
 					output << dec;
@@ -384,7 +398,49 @@ int main() {
 			}
 		}
 	}
-	generateNoteTable(output);
+	//PROCESS ALL INSTRUMENT/MACRO DATA
+	output << "instruments:"<< endl;
+	for (int i = 0; i < instruments.size(); i++) {
+		output << "\t.dw instrument" << i << endl;
+	}
+	output << endl;
+
+	int index = 0;
+	for (auto instrument : instruments) {
+		output << dec << "instrument" << index++ << ": ";
+		
+		string macroLabels = "";
+		int usedMacros = 0; //each macro type will be specified by a binary bit
+		if (instrument.second->volume != NULL) {
+			usedMacros += 1; //bit 0
+			macroLabels += ", volume_macro" + to_string(findMacroIndex(&volumeMacros, instrument.second->volume));
+		}
+		if (instrument.second->arpeggio != NULL) {
+			usedMacros += 2; //bit 1
+			macroLabels += ", arpeggio_macro" + to_string(findMacroIndex(&arpeggioMacros, instrument.second->arpeggio));
+		}
+		if (instrument.second->pitch != NULL) {
+			usedMacros += 4; //bit 2
+			macroLabels += ", pitch_macro" + to_string(findMacroIndex(&pitchMacros, instrument.second->pitch));
+		}
+		if (instrument.second->hiPitch != NULL) {
+			usedMacros += 8; //bit 3
+			macroLabels += ", hi_pitch_macro" + to_string(findMacroIndex(&hiPitchMacros, instrument.second->hiPitch));
+		}
+		if (instrument.second->duty != NULL) {
+			usedMacros += 16; //bit 4
+			macroLabels += ", duty_macro" + to_string(findMacroIndex(&dutyMacros, instrument.second->duty));
+		}
+
+		output << ".dw 0b" << bitset<8>(usedMacros) << macroLabels << endl;;
+	}
+	output << endl;
+
+	processMacros(output, &volumeMacros, 0);
+	processMacros(output, &arpeggioMacros, 1);
+	processMacros(output, &pitchMacros, 2);
+	processMacros(output, &hiPitchMacros, 3);
+	processMacros(output, &dutyMacros, 4);
 	cout << "Process complete" << endl;
 }
 
@@ -455,7 +511,7 @@ void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, i
 	if (delay != 0) {
 		calculateDelay(output, delay, speed, numOfRows);
 	}
-	output << "0xFF" << endl; //end of row pattern flag
+	output << "0xff" << endl; //end of row pattern flag
 	*prevVolume = prevVol;
 	*volume = vol;
 }
@@ -464,9 +520,63 @@ void calculateDelay(ofstream& output, int delay, int speed, int numOfRows) {
 	int numOfCycles = delay * speed; //this is the number of NES frame sequences to wait. NES frame sequencer clocks at 60Hz (NTSC)
 	numOfCycles += VOLUME_LEVELS::Fifteen; //delay levels must range between the highest volume level (0x66) and the instrument flag (0xE4)
 	for (numOfCycles; numOfCycles >= 0xE4; numOfCycles -= (0xE4-VOLUME_LEVELS::Fifteen)) {
-		output << "0xE3, ";
+		output << "0xe3, ";
 	}
 	output << "0x" << setfill('0') << setw(2) << hex << numOfCycles << ", ";
+}
+
+int findMacroIndex(map<int, Macro*>* macros, Macro* macroTarget) {
+	int index = 0;
+	for (auto x : *macros) {
+		if (x.second == macroTarget) {
+			return index;
+		}
+		index++;
+	}
+	return -1;
+}
+
+void processMacros(ofstream& output, map<int, Macro*>* macros, int macroType) {
+	int index = 0;
+	string macroLabel = "";
+	string endFlag = "0xff";
+	switch (macroType) {
+	case 0:
+		macroLabel = "volume_macro";
+		break;
+	case 1:
+		macroLabel = "arpeggio_macro";
+		endFlag = "0x80"; //-1 in two's complement is 0xff, so we use the value for -128 (0x80) as the end flag
+		break;
+	case 2:
+		macroLabel = "pitch_macro";
+		endFlag = "0x80";
+		break;
+	case 3:
+		macroLabel = "hi_pitch_macro";
+		endFlag = "0x80";
+		break;
+	case 4:
+		macroLabel = "duty_macro";
+		break;
+	}
+	for (auto macro: *macros) {
+		output << dec << macroLabel << index++ << ": .dw ";
+		if (macroType == 1) { //if the macro is an arpeggio macro
+			output << "0x" << setfill('0') << setw(2) << hex << static_cast<int>(macro.second->mode) << ", "; //flag to store arpeggio mode is written first
+		}
+		for (auto value : macro.second->values) {
+			output << "0x" << setfill('0') << setw(2) << hex << static_cast<int>(value) << ", ";
+		}
+		output << endFlag << " ";
+		if (macro.second->loop != (uint8_t)-1) { //check if the macro loops
+			output << "0x" << setfill('0') << setw(2) << hex << static_cast<int>(macro.second->loop) << endl; //if the macro loops, it is defined after the end flag
+		}
+		else {
+			output << "0xff" << endl;
+		}
+	}
+	output << endl;
 }
 
 void generateNoteTable(ofstream& output) {
@@ -500,4 +610,5 @@ void generateNoteTable(ofstream& output) {
 		}
 		output << endl;
 	}
+	output << endl;
 }
