@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <vector>
 #include <algorithm>
+#include <iterator>
 using namespace std;
 
 const unordered_map<string, int> NOTES = {
@@ -69,7 +70,7 @@ struct Pattern {
 };
 
 int calculateTicksPerRow(int tempo, int speed);
-void processRows(ofstream& output, vector<Row*>* rows, int channel, int speed, int numOfRows, int* prevVolume, int* volume);
+void processRows(ofstream& output, vector<Row*>* rows, int channel, int speed, int numOfRows, int* prevVolume, int* volume, map<int, Instrument*>* instruments, int* prevInstrument, int* instrument);
 void calculateDelay(ofstream& output, int delay, int speed, int numOfRows);
 int findMacroIndex(map<int, Macro*>* macros, Macro* macroTarget);
 void processMacros(ofstream& output, map<int, Macro*>* macros, int macroType);
@@ -389,9 +390,11 @@ int main() {
 				output << "song" << songNumber << "_channel" << i << "_patterns:" << endl;
 				int prevVolume = -1; //-1 represents a silenced channel
 				int volume = 15;
+				int prevInstrument = -1;
+				int instrument = 0;
 				for (int pattern = 0; pattern < channelsUsedPatterns[i].size(); pattern++) {
 					output << "\tsong" << songNumber << "_channel" << i << "_pattern" << channelsUsedPatterns[i][pattern] << ": .dw ";
-					processRows(output, &patterns[channelsUsedPatterns[i][pattern]]->rows, i, speed, numOfRows, &prevVolume, &volume);
+					processRows(output, &patterns[channelsUsedPatterns[i][pattern]]->rows, i, speed, numOfRows, &prevVolume, &volume, &instruments, &prevInstrument, &instrument);
 					output << dec;
 				}
 				output << endl;
@@ -452,19 +455,22 @@ int calculateTicksPerRow(int tempo, int ticksPerRow) {
 	return multiplierTempo * ticksPerRow;
 }
 
-void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, int numOfRows, int *prevVolume, int* volume) {
+void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, int numOfRows, int *prevVolume, int* volume, map<int, Instrument*>* instruments, int* prevInstrument, int* instrument) {
 	output << hex;
 	int noteNum = -1;
 	int delay = 0;
 	int prevVol = *prevVolume;
 	int vol = *volume;
+	int prevInst = *prevInstrument;
+	int inst = *instrument;
 	for (int row = 0; row < rows->size(); row++) { //loop through each row
 		if (NOTES.find(rows->at(row)->channels.at(channel)->note) == NOTES.end()) { //get note data
-			cout << "WARNING: Notes must range between C-0 to B-7. A note higher than larger B-7 was found and will be ignored." << endl;
+			cout << "WARNING: Notes must range between C-0 to B-7. A note higher than B-7 was found and will be ignored." << endl;
 		}
 		else {
 			noteNum = NOTES.at(rows->at(row)->channels.at(channel)->note);
 		}
+
 		if (rows->at(row)->channels.at(channel)->volume != ".") { //get volume data
 			if (vol != -1) {
 				vol = stoi(rows->at(row)->channels.at(channel)->volume, NULL, 16);
@@ -472,6 +478,10 @@ void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, i
 			else { //if the channel is silenced, only change the prevVol value. vol has to stay -1 in order to represent a silenced channel.
 				prevVol = stoi(rows->at(row)->channels.at(channel)->volume, NULL, 16);
 			}
+		}
+
+		if (rows->at(row)->channels.at(channel)->instrument != "..") { //get instrument data
+			inst = stoi(rows->at(row)->channels.at(channel)->instrument);
 		}
 
 		if (noteNum != -1) {
@@ -498,6 +508,7 @@ void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, i
 				output << "0x" << setfill('0') << setw(2) << noteNum << ", ";
 			}
 		}
+
 		if (prevVol != vol && vol != -1) { //output volume data
 			if (delay != 0) {
 				calculateDelay(output, delay, speed, numOfRows);
@@ -506,6 +517,17 @@ void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, i
 			prevVol = vol;
 			output << "0x" << setfill('0') << setw(2) << vol + VOLUME_LEVELS::Zero << ", ";
 		}
+
+		if (prevInst != inst) { //output instrument data
+			if (delay != 0) {
+				calculateDelay(output, delay, speed, numOfRows);
+				delay = 0;
+			}
+			prevInst = inst;
+			output << "0xe4, "; //instrument change flag
+			output << "0x" << setfill('0') << setw(2) << distance(instruments->begin(), instruments->find(inst)) << ", ";
+		}
+
 		delay++;
 	}
 	if (delay != 0) {
@@ -514,6 +536,8 @@ void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, i
 	output << "0xff" << endl; //end of row pattern flag
 	*prevVolume = prevVol;
 	*volume = vol;
+	*prevInstrument = prevInst;
+	*instrument = inst;
 }
 
 void calculateDelay(ofstream& output, int delay, int speed, int numOfRows) {
