@@ -365,7 +365,7 @@ int main() {
 			//PROCESS ALL TRACK DATA FOR OUTPUT
 			vector<int> channelsUsedPatterns[MAX_CHANNELS];
 
-			output << "song" << songNumber << "_frames:" << endl; //song frames
+			output << dec << "song" << songNumber << "_frames:" << endl; //song frames
 			for (int frame = 0; frame < (MAX_FRAMES>frames.size() ? frames.size() : MAX_FRAMES); frame++) {
 				output << "\t.dw ";
 				for (int i = 0; i < MAX_CHANNELS; i++) {
@@ -393,7 +393,7 @@ int main() {
 				int prevInstrument = -1;
 				int instrument = 0;
 				for (int pattern = 0; pattern < channelsUsedPatterns[i].size(); pattern++) {
-					output << "\tsong" << songNumber << "_channel" << i << "_pattern" << channelsUsedPatterns[i][pattern] << ": .dw ";
+					output << "\tsong" << songNumber << "_channel" << i << "_pattern" << channelsUsedPatterns[i][pattern] << ": .db ";
 					processRows(output, &patterns[channelsUsedPatterns[i][pattern]]->rows, i, speed, numOfRows, &prevVolume, &volume, &instruments, &prevInstrument, &instrument);
 					output << dec;
 				}
@@ -561,6 +561,9 @@ int findMacroIndex(map<int, Macro*>* macros, Macro* macroTarget) {
 }
 
 void processMacros(ofstream& output, map<int, Macro*>* macros, int macroType) {
+	if (macros->empty()) {
+		return;
+	}
 	int index = 0;
 	string macroLabel = "";
 	string endFlag = "0xff";
@@ -585,14 +588,14 @@ void processMacros(ofstream& output, map<int, Macro*>* macros, int macroType) {
 		break;
 	}
 	for (auto macro: *macros) {
-		output << dec << macroLabel << index++ << ": .dw ";
+		output << dec << macroLabel << index++ << ": .db ";
 		if (macroType == 1) { //if the macro is an arpeggio macro
 			output << "0x" << setfill('0') << setw(2) << hex << static_cast<int>(macro.second->mode) << ", "; //flag to store arpeggio mode is written first
 		}
 		for (auto value : macro.second->values) {
 			output << "0x" << setfill('0') << setw(2) << hex << static_cast<int>(value) << ", ";
 		}
-		output << endFlag << " ";
+		output << endFlag << ", ";
 		if (macro.second->loop != (uint8_t)-1) { //check if the macro loops
 			output << "0x" << setfill('0') << setw(2) << hex << static_cast<int>(macro.second->loop) << endl; //if the macro loops, it is defined after the end flag
 		}
