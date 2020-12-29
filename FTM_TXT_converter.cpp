@@ -20,7 +20,7 @@ const unordered_map<string, int> NOTES = {
 	{"C-5", 0x33}, {"C#5", 0x34}, {"D-5", 0x35}, {"D#5", 0x36}, {"E-5", 0x37}, {"F-5", 0x38}, {"F#5", 0x39}, {"G-5", 0x3A}, {"G#5", 0x3B}, {"A-5", 0x3C}, {"A#5", 0x3D}, {"B-5", 0x3E},
 	{"C-6", 0x3F}, {"C#6", 0x40}, {"D-6", 0x41}, {"D#6", 0x42}, {"E-6", 0x43}, {"F-6", 0x44}, {"F#6", 0x45}, {"G-6", 0x46}, {"G#6", 0x47}, {"A-6", 0x48}, {"A#6", 0x49}, {"B-6", 0x4A},
 	{"C-7", 0x4B}, {"C#7", 0x4C}, {"D-7", 0x4D}, {"D#7", 0x4E}, {"E-7", 0x4F}, {"F-7", 0x50}, {"F#7", 0x51}, {"G-7", 0x52}, {"G#7", 0x53}, {"A-7", 0x54}, {"A#7", 0x55}, {"B-7", 0x56},
-	{"...", -1},  {"---", -2}
+	{"...", -1},  {"---", -2}, {"===", -3}
 };
 
 enum VOLUME_LEVELS {
@@ -34,7 +34,7 @@ const int MAX_ROWS = 255;
 
 struct Macro {
 	uint8_t loop = -1;
-	uint8_t unknown = -1;
+	uint8_t release = -1;
 	uint8_t mode = -1;
 	vector<uint8_t> values;
 };
@@ -129,16 +129,16 @@ int main() {
 			type = &dutyMacros;
 			break;
 		}
-		int id, loop, unknown, mode;
+		int id, loop, release, mode;
 		vector<uint8_t> values;
-		ss >> id >> loop >> unknown >> mode >> data;
+		ss >> id >> loop >> release >> mode >> data;
 		while (ss >> data) {
 			values.push_back(stoi(data));
 		}
 
 		Macro* macro = new Macro;
 		macro->loop = loop;
-		macro->unknown = unknown;
+		macro->release = release;
 		macro->mode= mode;
 		macro->values = values;
 		type->insert({ id, macro });
@@ -484,8 +484,8 @@ void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, i
 			inst = stoi(rows->at(row)->channels.at(channel)->instrument);
 		}
 
-		if (noteNum != -1) {
-			if (noteNum == -2) { //output processed note data
+		if (noteNum != -1) { //output processed note data
+			if (noteNum == -2) {
 				if (delay != 0) {
 					calculateDelay(output, delay, speed, numOfRows);
 					delay = 0;
@@ -495,6 +495,13 @@ void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, i
 					vol = -1; //-1 represents a silenced channel
 				}
 				output << "0x" << setfill('0') << setw(2) << VOLUME_LEVELS::Zero << ", "; //"---" silences the channel
+			}
+			else if (noteNum == -3) {
+				if (delay != 0) {
+					calculateDelay(output, delay, speed, numOfRows);
+					delay = 0;
+				}
+				output << "0xe3, "; //note release flag
 			}
 			else {
 				if (delay != 0) {
@@ -524,7 +531,7 @@ void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, i
 				delay = 0;
 			}
 			prevInst = inst;
-			output << "0xe4, "; //instrument change flag
+			output << "0xe2, "; //instrument change flag
 			output << "0x" << setfill('0') << setw(2) << distance(instruments->begin(), instruments->find(inst)) << ", ";
 		}
 
@@ -542,9 +549,9 @@ void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, i
 
 void calculateDelay(ofstream& output, int delay, int speed, int numOfRows) {
 	int numOfCycles = delay * speed; //this is the number of NES frame sequences to wait. NES frame sequencer clocks at 60Hz (NTSC)
-	numOfCycles += VOLUME_LEVELS::Fifteen; //delay levels must range between the highest volume level (0x66) and the instrument flag (0xE4)
-	for (numOfCycles; numOfCycles >= 0xE4; numOfCycles -= (0xE4-VOLUME_LEVELS::Fifteen)) {
-		output << "0xe3, ";
+	numOfCycles += VOLUME_LEVELS::Fifteen; //delay levels must range between the highest volume level (0x66) and the instrument flag (0xE2)
+	for (numOfCycles; numOfCycles >= 0xE2; numOfCycles -= (0xE2-VOLUME_LEVELS::Fifteen)) {
+		output << "0xe1, ";
 	}
 	output << "0x" << setfill('0') << setw(2) << hex << numOfCycles << ", ";
 }
@@ -565,8 +572,10 @@ void processMacros(ofstream& output, map<int, Macro*>* macros, int macroType) {
 		return;
 	}
 	int index = 0;
+	int offset = 2;
 	string macroLabel = "";
 	string endFlag = "0xff";
+
 	switch (macroType) {
 	case 0:
 		macroLabel = "volume_macro";
@@ -574,6 +583,7 @@ void processMacros(ofstream& output, map<int, Macro*>* macros, int macroType) {
 	case 1:
 		macroLabel = "arpeggio_macro";
 		endFlag = "0x80"; //-1 in two's complement is 0xff, so we use the value for -128 (0x80) as the end flag
+		offset = 3; //since the mode flag is stored at the 0th index, we have to offset all value indexes by an extra 1
 		break;
 	case 2:
 		macroLabel = "pitch_macro";
@@ -587,21 +597,30 @@ void processMacros(ofstream& output, map<int, Macro*>* macros, int macroType) {
 		macroLabel = "duty_macro";
 		break;
 	}
+
 	for (auto macro: *macros) {
 		output << dec << macroLabel << index++ << ": .db ";
+		if (macro.second->release != (uint8_t)-1) { //check for release flag
+			output << "0x" << setfill('0') << setw(2) << hex << (static_cast<int>(macro.second->release) + offset) << ", ";
+		}
+		else { //if there is no release flag
+			output << "0xff, ";
+		}
+		if (macro.second->loop != (uint8_t)-1) { //check for loop flag
+			output << "0x" << setfill('0') << setw(2) << hex << (static_cast<int>(macro.second->loop) + offset) << ", ";
+		}
+		else { //if there is no loop flag, just set the macro to loop back to the last available value
+			output << "0x" << setfill('0') << setw(2) << hex << (macro.second->values.size() - 1 + offset) << ", ";
+		}
 		if (macroType == 1) { //if the macro is an arpeggio macro
 			output << "0x" << setfill('0') << setw(2) << hex << static_cast<int>(macro.second->mode) << ", "; //flag to store arpeggio mode is written first
 		}
-		for (auto value : macro.second->values) {
+
+		for (int i = 0; i < macro.second->values.size(); i++) {
+			uint8_t value = macro.second->values.at(i);
 			output << "0x" << setfill('0') << setw(2) << hex << static_cast<int>(value) << ", ";
 		}
-		output << endFlag << ", ";
-		if (macro.second->loop != (uint8_t)-1) { //check if the macro loops
-			output << "0x" << setfill('0') << setw(2) << hex << static_cast<int>(macro.second->loop) << endl; //if the macro loops, it is defined after the end flag
-		}
-		else {
-			output << "0xff" << endl;
-		}
+		output << endFlag << endl;
 	}
 	output << endl;
 }
