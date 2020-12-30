@@ -77,7 +77,7 @@ void processMacros(ofstream& output, map<int, Macro*>* macros, int macroType);
 void generateNoteTable(ofstream& output);
 
 int main() {
-	string fileName = "Touhou 6 - Shanghai Teahouse -Chinise Tea-.txt";
+	string fileName = "arpeg_test.txt";
 	ifstream file(fileName); //some .txt files won't read properly without, ios::binary
 	ofstream output(fileName.substr(0, fileName.size() - 4) + "_OUTPUT.txt", std::ofstream::out | std::ofstream::trunc);
 	generateNoteTable(output);
@@ -610,7 +610,12 @@ void processMacros(ofstream& output, map<int, Macro*>* macros, int macroType) {
 			output << "0x" << setfill('0') << setw(2) << hex << (static_cast<int>(macro.second->loop) + offset) << ", ";
 		}
 		else { //if there is no loop flag, just set the macro to loop back to the last available value
-			output << "0x" << setfill('0') << setw(2) << hex << (macro.second->values.size() - 1 + offset) << ", ";
+			if (macroType == 1) { //arpeggio macros must use 0xff if there is no loop
+				output << "0xff, ";
+			}
+			else {
+				output << "0x" << setfill('0') << setw(2) << hex << (macro.second->values.size() - 1 + offset) << ", ";
+			}
 		}
 		if (macroType == 1) { //if the macro is an arpeggio macro
 			output << "0x" << setfill('0') << setw(2) << hex << static_cast<int>(macro.second->mode) << ", "; //flag to store arpeggio mode is written first
