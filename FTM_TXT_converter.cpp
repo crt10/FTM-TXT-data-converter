@@ -481,7 +481,7 @@ void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, i
 		}
 
 		if (rows->at(row)->channels.at(channel)->instrument != "..") { //get instrument data
-			inst = stoi(rows->at(row)->channels.at(channel)->instrument);
+			inst = stoi(rows->at(row)->channels.at(channel)->instrument, NULL, 16);
 		}
 
 		if (noteNum != -1) { //output processed note data
