@@ -77,7 +77,7 @@ void processMacros(ofstream& output, map<int, Macro*>* macros, int macroType);
 void generateNoteTable(ofstream& output);
 
 int main() {
-	string fileName = "arpeg_test.txt";
+	string fileName = "pitch_test.txt";
 	ifstream file(fileName); //some .txt files won't read properly without, ios::binary
 	ofstream output(fileName.substr(0, fileName.size() - 4) + "_OUTPUT.txt", std::ofstream::out | std::ofstream::trunc);
 	generateNoteTable(output);
@@ -609,12 +609,12 @@ void processMacros(ofstream& output, map<int, Macro*>* macros, int macroType) {
 		if (macro.second->loop != (uint8_t)-1) { //check for loop flag
 			output << "0x" << setfill('0') << setw(2) << hex << (static_cast<int>(macro.second->loop) + offset) << ", ";
 		}
-		else { //if there is no loop flag, just set the macro to loop back to the last available value
-			if (macroType == 1) { //arpeggio macros must use 0xff if there is no loop
-				output << "0xff, ";
+		else {
+			if (macroType == 0) { //the volume loop flag will be set to loop back to the last available value
+				output << "0x" << setfill('0') << setw(2) << hex << (macro.second->values.size() - 1 + offset) << ", ";
 			}
 			else {
-				output << "0x" << setfill('0') << setw(2) << hex << (macro.second->values.size() - 1 + offset) << ", ";
+				output << "0xff, ";
 			}
 		}
 		if (macroType == 1) { //if the macro is an arpeggio macro
