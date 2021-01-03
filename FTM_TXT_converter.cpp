@@ -77,7 +77,7 @@ void processMacros(ofstream& output, map<int, Macro*>* macros, int macroType);
 void generateNoteTable(ofstream& output);
 
 int main() {
-	string fileName = "corridorsoftime.txt";
+	string fileName = "anothermedium.txt";
 	ifstream file(fileName); //some .txt files won't read properly without, ios::binary
 	ofstream output(fileName.substr(0, fileName.size() - 4) + "_OUTPUT.txt", std::ofstream::out | std::ofstream::trunc);
 	generateNoteTable(output);
@@ -501,7 +501,7 @@ void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, i
 					calculateDelay(output, delay, speed, numOfRows);
 					delay = 0;
 				}
-				output << "0xe3, "; //note release flag
+				output << "0xe4, "; //note release flag
 			}
 			else {
 				if (delay != 0) {
@@ -531,7 +531,7 @@ void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, i
 				delay = 0;
 			}
 			prevInst = inst;
-			output << "0xe2, "; //instrument change flag
+			output << "0xe3, "; //instrument change flag
 			output << "0x" << setfill('0') << setw(2) << distance(instruments->begin(), instruments->find(inst)) << ", ";
 		}
 
@@ -549,9 +549,9 @@ void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, i
 
 void calculateDelay(ofstream& output, int delay, int speed, int numOfRows) {
 	int numOfCycles = delay * speed; //this is the number of NES frame sequences to wait. NES frame sequencer clocks at 60Hz (NTSC)
-	numOfCycles += VOLUME_LEVELS::Fifteen; //delay levels must range between the highest volume level (0x66) and the instrument flag (0xE2)
-	for (numOfCycles; numOfCycles >= 0xE2; numOfCycles -= (0xE2-VOLUME_LEVELS::Fifteen)) {
-		output << "0xe1, ";
+	numOfCycles += VOLUME_LEVELS::Fifteen; //delay levels must range between the highest volume level (0x66) and the instrument flag (0xE3)
+	for (numOfCycles; numOfCycles >= 0xE3; numOfCycles -= (0xE3-VOLUME_LEVELS::Fifteen)) {
+		output << "0xe2, ";
 	}
 	output << "0x" << setfill('0') << setw(2) << hex << numOfCycles << ", ";
 }
@@ -637,8 +637,8 @@ void generateNoteTable(ofstream& output) {
 	output << "note_table: " << endl;
 	output << "\t.dw ";
 	for (int i = 0; i < 3; i++) {
-		double frequency = a * pow(ratio, i);
-		int timerPeriod = round((11.1746014718 * ( (1789773.0) / (16 * frequency) )) / 2); //divide by 2 because famitracker notes are calculated with twice the frequency of the note
+		double frequency = a * pow(ratio, i) * 2;  //*2 because famitracker notes are calculated with twice the frequency of the note
+		int timerPeriod = round((11.1746014718 * ( (1789773.0) / (16 * frequency) )));
 		output << "0x" << setfill('0') << setw(4) << hex << timerPeriod;
 		if (i != 2) {
 			output << ", ";
@@ -652,7 +652,7 @@ void generateNoteTable(ofstream& output) {
 			if (o == 12) {
 				a *= 2;
 			}
-			double frequency = a * pow(ratio, o%12);
+			double frequency = a * pow(ratio, o%12) * 2; //*2 because famitracker notes are calculated with twice the frequency of the note
 			int timerPeriod = round(11.1746014718 * ((1789773.0) / (16 * frequency)));
 			output << "0x" << setfill('0') << setw(4) << hex << timerPeriod;
 			if (o != 14) {
