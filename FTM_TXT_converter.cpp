@@ -77,7 +77,7 @@ void processMacros(ofstream& output, map<int, Macro*>* macros, int macroType);
 void generateNoteTable(ofstream& output);
 
 int main() {
-	string fileName = "pitch_test.txt";
+	string fileName = "corridorsoftime.txt";
 	ifstream file(fileName); //some .txt files won't read properly without, ios::binary
 	ofstream output(fileName.substr(0, fileName.size() - 4) + "_OUTPUT.txt", std::ofstream::out | std::ofstream::trunc);
 	generateNoteTable(output);
@@ -638,7 +638,7 @@ void generateNoteTable(ofstream& output) {
 	output << "\t.dw ";
 	for (int i = 0; i < 3; i++) {
 		double frequency = a * pow(ratio, i);
-		int timerPeriod = round(11.1746014718 * ((1789773.0) / (16 * frequency)));
+		int timerPeriod = round((11.1746014718 * ( (1789773.0) / (16 * frequency) )) / 2); //divide by 2 because famitracker notes are calculated with twice the frequency of the note
 		output << "0x" << setfill('0') << setw(4) << hex << timerPeriod;
 		if (i != 2) {
 			output << ", ";
@@ -648,14 +648,14 @@ void generateNoteTable(ofstream& output) {
 
 	for (int i = 1; i <= 7; i++) {
 		output << "\t.dw ";
-		for (int i = 3; i < 15; i++) {
-			if (i == 12) {
+		for (int o = 3; o < 15; o++) {
+			if (o == 12) {
 				a *= 2;
 			}
-			double frequency = a * pow(ratio, i%12);
+			double frequency = a * pow(ratio, o%12);
 			int timerPeriod = round(11.1746014718 * ((1789773.0) / (16 * frequency)));
 			output << "0x" << setfill('0') << setw(4) << hex << timerPeriod;
-			if (i != 14) {
+			if (o != 14) {
 				output << ", ";
 			}
 		}
