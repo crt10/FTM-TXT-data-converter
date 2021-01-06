@@ -27,6 +27,11 @@ enum VOLUME_LEVELS {
 	Zero = 0x57, One, Two, Three, Four, Five, Six, Seven, Eight, Nine, Ten, Eleven, Twelve, Thirteen, Fourteen, Fifteen //Fifteen == 0x66, if Zero == 0x57
 };
 
+const unordered_map<string, int> EFFECTS = {
+	{"0", 0xE5}, {"1", 0xE6}, {"2", 0xE7}, {"3", 0xE8}, {"4", 0xE9}, {"7", 0xEA}, {"A", 0xEB}, {"B", 0xEC}, {"C", 0xED}, {"D", 0xEE}, {"E", 0xEF}, {"F", 0xF0}, {"G", 0xF1},
+	{"H", 0xF2}, {"I", 0xF3}, {"J", 0xF5}, {"P", 0xF6}, {"Q", 0xF7}, {"R", 0xF8}, {"S", 0xF9}, {"V", 0xFA}, {"W", 0xFB}, {"X", 0xFC}, {"Y", 0xFD}, {"Z", 0xFE}
+};
+
 const int MAX_INSTRUMENTS = 255;
 const int MAX_CHANNELS = 5;
 const int MAX_FRAMES = (pow(2, 16)-1)/2 / MAX_CHANNELS; //we are using 16 bytes for offsetting frames. since we are grabbing byte data, we must *2 in avr, which gives us half the maximum number of offsets
@@ -71,13 +76,14 @@ struct Pattern {
 
 int calculateTicksPerRow(int tempo, int speed);
 void processRows(ofstream& output, vector<Row*>* rows, int channel, int speed, int numOfRows, int* prevVolume, int* volume, map<int, Instrument*>* instruments, int* prevInstrument, int* instrument);
+void processEffect(ofstream& output, string fx);
 void calculateDelay(ofstream& output, int delay, int speed, int numOfRows);
 int findMacroIndex(map<int, Macro*>* macros, Macro* macroTarget);
 void processMacros(ofstream& output, map<int, Macro*>* macros, int macroType);
 void generateNoteTable(ofstream& output);
 
 int main() {
-	string fileName = "anothermedium.txt";
+	string fileName = "Touhou 6 - Shanghai Teahouse -Chinise Tea-.txt";
 	ifstream file(fileName); //some .txt files won't read properly without, ios::binary
 	ofstream output(fileName.substr(0, fileName.size() - 4) + "_OUTPUT.txt", std::ofstream::out | std::ofstream::trunc);
 	generateNoteTable(output);
@@ -480,6 +486,11 @@ void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, i
 			}
 		}
 
+		string fx1 = rows->at(row)->channels.at(channel)->fx1; //get fx data
+		string fx2 = rows->at(row)->channels.at(channel)->fx2;
+		string fx3 = rows->at(row)->channels.at(channel)->fx3;
+		string fx4 = rows->at(row)->channels.at(channel)->fx4;
+
 		if (rows->at(row)->channels.at(channel)->instrument != "..") { //get instrument data
 			inst = stoi(rows->at(row)->channels.at(channel)->instrument, NULL, 16);
 		}
@@ -535,6 +546,35 @@ void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, i
 			output << "0x" << setfill('0') << setw(2) << distance(instruments->begin(), instruments->find(inst)) << ", ";
 		}
 
+		if (fx1 != "...") { //output fx data
+			if (delay != 0) {
+				calculateDelay(output, delay, speed, numOfRows);
+				delay = 0;
+			}
+			processEffect(output, fx1);
+		}
+		if (fx2 != "...") {
+			if (delay != 0) {
+				calculateDelay(output, delay, speed, numOfRows);
+				delay = 0;
+			}
+			processEffect(output, fx2);
+		}
+		if (fx3 != "...") {
+			if (delay != 0) {
+				calculateDelay(output, delay, speed, numOfRows);
+				delay = 0;
+			}
+			processEffect(output, fx3);
+		}
+		if (fx4 != "...") {
+			if (delay != 0) {
+				calculateDelay(output, delay, speed, numOfRows);
+				delay = 0;
+			}
+			processEffect(output, fx4);
+		}
+
 		delay++;
 	}
 	if (delay != 0) {
@@ -545,6 +585,72 @@ void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, i
 	*volume = vol;
 	*prevInstrument = prevInst;
 	*instrument = inst;
+}
+
+void processEffect(ofstream& output, string fx) {
+	string type = fx.substr(0, 1);
+	int flag = EFFECTS.at(type);
+	//if (type != "G") { //the Gxx delay effect will be subtly implemented in the standard delays (0x67 - 0xE2)
+	if (type == "P") {
+		output << "0x" << setfill('0') << setw(2) << flag << ", "; //output the flag for the fx
+	}
+
+	int parameter = stoi(fx.substr(1, 3), NULL, 16);
+	switch (flag) {
+	case 0xE5: //0xy arpeggio
+		break;
+	case 0xE6: //1xx pitch slide up
+		break;
+	case 0xE7: //2xx pitch slide down
+		break;
+	case 0xE8: //3xx automatic portamento
+		break;
+	case 0xE9: //4xy vibrato
+		break;
+	case 0xEA: //7xy tremelo
+		break;
+	case 0xEB: //Axy volume slide
+		break;
+	case 0xEC: //Bxx pattern jump
+		break;
+	case 0xED: //Cxx halt
+		break;
+	case 0xEE: //Dxx frame skip
+		break;
+	case 0xEF: //Exx volume
+		break;
+	case 0xF0: //Fxx speed and tempo
+		break;
+	case 0xF1: //Gxx note delay
+		break;
+	case 0xF2: //Hxy hardware sweep up
+		break;
+	case 0xF3: //Ixy hardware sweep down
+		break;
+	case 0xF4: //Hxx FDS modulation depth
+		break;
+	case 0xF5: //Jxx FDS modulation speed
+		break;
+	case 0xF6: //Pxx fine pitch
+		output << "0x" << setfill('0') << setw(2) << 0x80-parameter << ", ";
+		break;
+	case 0xF7: //Qxy note slide up
+		break;
+	case 0xF8: //Rxy note slide down
+		break;
+	case 0xF9: //Sxx mute delay
+		break;
+	case 0xFA: //Vxx duty or noise mode
+		break;
+	case 0xFB: //Wxx DPCM sample speed
+		break;
+	case 0xFC: //Xxx DPCM sample retrigger
+		break;
+	case 0xFD: //DPCM sample offset
+		break;
+	case 0xFE: //DPCM delta counter
+		break;
+	}
 }
 
 void calculateDelay(ofstream& output, int delay, int speed, int numOfRows) {
