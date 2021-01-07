@@ -83,7 +83,7 @@ void processMacros(ofstream& output, map<int, Macro*>* macros, int macroType);
 void generateNoteTable(ofstream& output);
 
 int main() {
-	string fileName = "Touhou 6 - Shanghai Teahouse -Chinise Tea-.txt";
+	string fileName = "fx_test.txt";
 	ifstream file(fileName); //some .txt files won't read properly without, ios::binary
 	ofstream output(fileName.substr(0, fileName.size() - 4) + "_OUTPUT.txt", std::ofstream::out | std::ofstream::trunc);
 	generateNoteTable(output);
@@ -591,11 +591,12 @@ void processEffect(ofstream& output, string fx) {
 	string type = fx.substr(0, 1);
 	int flag = EFFECTS.at(type);
 	//if (type != "G") { //the Gxx delay effect will be subtly implemented in the standard delays (0x67 - 0xE2)
-	if (type == "P") {
+	if (type == "P" || type == "A") {
 		output << "0x" << setfill('0') << setw(2) << flag << ", "; //output the flag for the fx
 	}
 
-	int parameter = stoi(fx.substr(1, 3), NULL, 16);
+	uint8_t parameter = stoi(fx.substr(1, 3), NULL, 16);
+	int x, y, z;
 	switch (flag) {
 	case 0xE5: //0xy arpeggio
 		break;
@@ -610,6 +611,13 @@ void processEffect(ofstream& output, string fx) {
 	case 0xEA: //7xy tremelo
 		break;
 	case 0xEB: //Axy volume slide
+		x = -(parameter & 0x0F); //slide down
+		y = (parameter & 0xF0) >> 4; //slide up
+		z = (x + y) * 10000 / 8; //*1000 to scale the total with 0.0625. /8 as per the Axy documentation on famitracker.
+
+		z /= 625; //lowest binary fraction denomination with 4 bits is 0.0625
+		parameter = z;
+		output << "0x" << setfill('0') << setw(2) << static_cast<int>(parameter) << ", ";
 		break;
 	case 0xEC: //Bxx pattern jump
 		break;
@@ -632,7 +640,7 @@ void processEffect(ofstream& output, string fx) {
 	case 0xF5: //Jxx FDS modulation speed
 		break;
 	case 0xF6: //Pxx fine pitch
-		output << "0x" << setfill('0') << setw(2) << 0x80-parameter << ", ";
+		output << "0x" << setfill('0') << setw(2) << static_cast < int>(0x80-parameter) << ", ";
 		break;
 	case 0xF7: //Qxy note slide up
 		break;
