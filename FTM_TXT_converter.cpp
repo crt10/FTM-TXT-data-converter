@@ -83,7 +83,7 @@ void processMacros(ofstream& output, map<int, Macro*>* macros, int macroType);
 void generateNoteTable(ofstream& output);
 
 int main() {
-	string fileName = "Touhou 6 - Shanghai Teahouse -Chinise Tea-.txt";
+	string fileName = "JOJO - Bloody Stream.txt";
 	ifstream file(fileName); //some .txt files won't read properly without, ios::binary
 	ofstream output(fileName.substr(0, fileName.size() - 4) + "_OUTPUT.txt", std::ofstream::out | std::ofstream::trunc);
 	generateNoteTable(output);
@@ -170,9 +170,9 @@ int main() {
 		istringstream ss(line);
 		string data;
 		ss >> data;
-		if (data != "INST2A03") {
+		if (data != "INST2A03" && data != "KEYDPCM") {
 			if (data != "") {
-				cout << "WARNING: Non-INST2A03 instrument found and will be ignored." << endl;
+				cout << "ERROR: Non-INST2A03 instrument found." << endl;
 			}
 			break;
 		}
@@ -591,7 +591,7 @@ void processEffect(ofstream& output, string fx) {
 	string type = fx.substr(0, 1);
 	int flag = EFFECTS.at(type);
 	//if (type != "G") { //the Gxx delay effect will be subtly implemented in the standard delays (0x67 - 0xE2)
-	if (type == "P" || type == "A") {
+	if (type == "P" || type == "A" || type == "Q" || type == "R" || type == "V") {
 		output << "0x" << setfill('0') << setw(2) << flag << ", "; //output the flag for the fx
 	}
 
@@ -643,12 +643,15 @@ void processEffect(ofstream& output, string fx) {
 		output << "0x" << setfill('0') << setw(2) << static_cast < int>(0x80-parameter) << ", ";
 		break;
 	case 0xF7: //Qxy note slide up
+		output << "0x" << setfill('0') << setw(2) << static_cast <int>(parameter) << ", ";
 		break;
 	case 0xF8: //Rxy note slide down
+		output << "0x" << setfill('0') << setw(2) << static_cast <int>(parameter) << ", ";
 		break;
 	case 0xF9: //Sxx mute delay
 		break;
 	case 0xFA: //Vxx duty or noise mode
+		output << "0x" << setfill('0') << setw(2) << static_cast <int>(parameter) << ", ";
 		break;
 	case 0xFB: //Wxx DPCM sample speed
 		break;
