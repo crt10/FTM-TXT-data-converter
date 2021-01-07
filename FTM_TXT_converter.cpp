@@ -83,7 +83,7 @@ void processMacros(ofstream& output, map<int, Macro*>* macros, int macroType);
 void generateNoteTable(ofstream& output);
 
 int main() {
-	string fileName = "fx_test.txt";
+	string fileName = "Touhou 6 - Shanghai Teahouse -Chinise Tea-.txt";
 	ifstream file(fileName); //some .txt files won't read properly without, ios::binary
 	ofstream output(fileName.substr(0, fileName.size() - 4) + "_OUTPUT.txt", std::ofstream::out | std::ofstream::trunc);
 	generateNoteTable(output);
@@ -527,7 +527,7 @@ void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, i
 			}
 		}
 
-		if (prevVol != vol && vol != -1) { //output volume data
+		if ((prevVol != vol || rows->at(row)->channels.at(channel)->volume != ".") && vol != -1) { //output volume data
 			if (delay != 0) {
 				calculateDelay(output, delay, speed, numOfRows);
 				delay = 0;
