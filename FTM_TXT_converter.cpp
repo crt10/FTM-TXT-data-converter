@@ -83,7 +83,7 @@ void processMacros(ofstream& output, map<int, Macro*>* macros, int macroType);
 void generateNoteTable(ofstream& output);
 
 int main() {
-	string fileName = "JOJO - Bloody Stream.txt";
+	string fileName = "fx_test.txt";
 	ifstream file(fileName); //some .txt files won't read properly without, ios::binary
 	ofstream output(fileName.substr(0, fileName.size() - 4) + "_OUTPUT.txt", std::ofstream::out | std::ofstream::trunc);
 	generateNoteTable(output);
@@ -591,7 +591,7 @@ void processEffect(ofstream& output, string fx) {
 	string type = fx.substr(0, 1);
 	int flag = EFFECTS.at(type);
 	//if (type != "G") { //the Gxx delay effect will be subtly implemented in the standard delays (0x67 - 0xE2)
-	if (type == "P" || type == "A" || type == "Q" || type == "R" || type == "V") {
+	if (type == "P" || type == "A" || type == "Q" || type == "R" || type == "V" || type == "1" || type == "2" || type == "3") {
 		output << "0x" << setfill('0') << setw(2) << flag << ", "; //output the flag for the fx
 	}
 
@@ -601,10 +601,13 @@ void processEffect(ofstream& output, string fx) {
 	case 0xE5: //0xy arpeggio
 		break;
 	case 0xE6: //1xx pitch slide up
+		output << "0x" << setfill('0') << setw(2) << static_cast <int>(parameter) << ", ";
 		break;
 	case 0xE7: //2xx pitch slide down
+		output << "0x" << setfill('0') << setw(2) << static_cast <int>(parameter) << ", ";
 		break;
 	case 0xE8: //3xx automatic portamento
+		output << "0x" << setfill('0') << setw(2) << static_cast <int>(parameter) << ", ";
 		break;
 	case 0xE9: //4xy vibrato
 		break;
