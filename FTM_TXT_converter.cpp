@@ -32,6 +32,9 @@ const unordered_map<string, int> EFFECTS = {
 	{"H", 0xF2}, {"I", 0xF3}, {"J", 0xF5}, {"P", 0xF6}, {"Q", 0xF7}, {"R", 0xF8}, {"S", 0xF9}, {"V", 0xFA}, {"W", 0xFB}, {"X", 0xFC}, {"Y", 0xFD}, {"Z", 0xFE}
 };
 
+//vibrato table: http://famitracker.com/wiki/index.php?title=4xy
+const int VIBRATO_DEPTH[16] = { 0x01, 0x03, 0x05, 0x07, 0x09, 0x0D, 0x13, 0x17, 0x1B, 0x21, 0x2B, 0x3B, 0x57, 0x7F, 0xBF, 0xFF };
+
 const int MAX_INSTRUMENTS = 255;
 const int MAX_CHANNELS = 5;
 const int MAX_FRAMES = (pow(2, 16)-1)/2 / MAX_CHANNELS; //we are using 16 bytes for offsetting frames. since we are grabbing byte data, we must *2 in avr, which gives us half the maximum number of offsets
@@ -81,17 +84,20 @@ void calculateDelay(ofstream& output, int delay, int speed, int numOfRows);
 int findMacroIndex(map<int, Macro*>* macros, Macro* macroTarget);
 void processMacros(ofstream& output, map<int, Macro*>* macros, int macroType);
 void generateNoteTable(ofstream& output);
+void generateVibratoTable(ofstream& output);
 
 int main() {
 	string fileName = "fx_test.txt";
 	ifstream file(fileName); //some .txt files won't read properly without, ios::binary
 	ofstream output(fileName.substr(0, fileName.size() - 4) + "_OUTPUT.txt", std::ofstream::out | std::ofstream::trunc);
-	generateNoteTable(output);
 
 	if (file.fail()) {
 		cout << "Error: Could not open the text file" << endl;
 		exit(1);
 	}
+
+	generateNoteTable(output);
+	generateVibratoTable(output);
 
 	//READ AND STORE MACRO DATA
 	map<int, Macro*> volumeMacros;
@@ -776,6 +782,24 @@ void generateNoteTable(ofstream& output) {
 			int timerPeriod = round(11.1746014718 * ((1789773.0) / (16 * frequency)));
 			output << "0x" << setfill('0') << setw(4) << hex << timerPeriod;
 			if (o != 14) {
+				output << ", ";
+			}
+		}
+		output << endl;
+	}
+	output << endl;
+}
+
+void generateVibratoTable(ofstream& output) {
+	output << "vibrato_table: " << endl;
+	for (int i = 0; i < 16; ++i) {   // depth
+		output << "\t.dw ";
+		for (int j = 0; j < 16; ++j) {   // phase
+			int value = 0;
+			double angle = (double(j) / 16.0) * (3.1415 / 2.0);
+			value = int(sin(angle) * VIBRATO_DEPTH[i]);
+			output << "0x" << setfill('0') << setw(2) << hex << value;
+			if (j != 15) {
 				output << ", ";
 			}
 		}
