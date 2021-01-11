@@ -597,7 +597,7 @@ void processEffect(ofstream& output, string fx) {
 	string type = fx.substr(0, 1);
 	int flag = EFFECTS.at(type);
 	//if (type != "G") { //the Gxx delay effect will be subtly implemented in the standard delays (0x67 - 0xE2)
-	if (type == "P" || type == "A" || type == "Q" || type == "R" || type == "V" || type == "1" || type == "2" || type == "3") {
+	if (type == "P" || type == "A" || type == "Q" || type == "R" || type == "V" || type == "1" || type == "2" || type == "3" || type == "0" || type == "4" || type == "7") {
 		output << "0x" << setfill('0') << setw(2) << flag << ", "; //output the flag for the fx
 	}
 
@@ -605,6 +605,7 @@ void processEffect(ofstream& output, string fx) {
 	int x, y, z;
 	switch (flag) {
 	case 0xE5: //0xy arpeggio
+		output << "0x" << setfill('0') << setw(2) << static_cast <int>(parameter) << ", ";
 		break;
 	case 0xE6: //1xx pitch slide up
 		output << "0x" << setfill('0') << setw(2) << static_cast <int>(parameter) << ", ";
@@ -616,8 +617,10 @@ void processEffect(ofstream& output, string fx) {
 		output << "0x" << setfill('0') << setw(2) << static_cast <int>(parameter) << ", ";
 		break;
 	case 0xE9: //4xy vibrato
+		output << "0x" << setfill('0') << setw(2) << static_cast <int>(parameter) << ", ";
 		break;
 	case 0xEA: //7xy tremelo
+		output << "0x" << setfill('0') << setw(2) << static_cast <int>(parameter) << ", ";
 		break;
 	case 0xEB: //Axy volume slide
 		x = -(parameter & 0x0F); //slide down
@@ -793,7 +796,7 @@ void generateNoteTable(ofstream& output) {
 void generateVibratoTable(ofstream& output) {
 	output << "vibrato_table: " << endl;
 	for (int i = 0; i < 16; ++i) {   // depth
-		output << "\t.dw ";
+		output << "\t.db ";
 		for (int j = 0; j < 16; ++j) {   // phase
 			int value = 0;
 			double angle = (double(j) / 16.0) * (3.1415 / 2.0);
