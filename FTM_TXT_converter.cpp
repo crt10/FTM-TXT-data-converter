@@ -80,14 +80,14 @@ struct Pattern {
 int calculateTicksPerRow(int tempo, int speed);
 void processRows(ofstream& output, vector<Row*>* rows, int channel, int speed, int numOfRows, int* prevVolume, int* volume, map<int, Instrument*>* instruments, int* prevInstrument, int* instrument);
 void processEffect(ofstream& output, string fx);
-void calculateDelay(ofstream& output, int delay, int speed, int numOfRows);
+void calculateDelay(ofstream& output, int delay);
 int findMacroIndex(map<int, Macro*>* macros, Macro* macroTarget);
 void processMacros(ofstream& output, map<int, Macro*>* macros, int macroType);
 void generateNoteTable(ofstream& output);
 void generateVibratoTable(ofstream& output);
 
 int main() {
-	string fileName = "fx_test.txt";
+	string fileName = "Touhou 6 - Shanghai Teahouse -Chinise Tea-.txt";
 	ifstream file(fileName); //some .txt files won't read properly without, ios::binary
 	ofstream output(fileName.substr(0, fileName.size() - 4) + "_OUTPUT.txt", std::ofstream::out | std::ofstream::trunc);
 
@@ -406,6 +406,9 @@ int main() {
 				int instrument = 0;
 				for (int pattern = 0; pattern < channelsUsedPatterns[i].size(); pattern++) {
 					output << "\tsong" << songNumber << "_channel" << i << "_pattern" << channelsUsedPatterns[i][pattern] << ": .db ";
+					if (i == 0 && pattern == 0) {
+						output << "0xf0, " << "0x" << setfill('0') << setw(2) << hex << speed << ", ";
+					}
 					processRows(output, &patterns[channelsUsedPatterns[i][pattern]]->rows, i, speed, numOfRows, &prevVolume, &volume, &instruments, &prevInstrument, &instrument);
 					output << dec;
 				}
@@ -504,7 +507,7 @@ void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, i
 		if (noteNum != -1) { //output processed note data
 			if (noteNum == -2) {
 				if (delay != 0) {
-					calculateDelay(output, delay, speed, numOfRows);
+					calculateDelay(output, delay);
 					delay = 0;
 				}
 				if (vol != -1) { //if the channel is not silenced, silence the channel and store the most recent volume level in the pattern
@@ -515,14 +518,14 @@ void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, i
 			}
 			else if (noteNum == -3) {
 				if (delay != 0) {
-					calculateDelay(output, delay, speed, numOfRows);
+					calculateDelay(output, delay);
 					delay = 0;
 				}
 				output << "0xe4, "; //note release flag
 			}
 			else {
 				if (delay != 0) {
-					calculateDelay(output, delay, speed, numOfRows);
+					calculateDelay(output, delay);
 					delay = 0;
 				}
 				if (vol == -1) { //if the channel was silenced, unsilence the channel and use the most recent volume level in the pattern
@@ -535,7 +538,7 @@ void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, i
 
 		if ((prevVol != vol || rows->at(row)->channels.at(channel)->volume != ".") && vol != -1) { //output volume data
 			if (delay != 0) {
-				calculateDelay(output, delay, speed, numOfRows);
+				calculateDelay(output, delay);
 				delay = 0;
 			}
 			prevVol = vol;
@@ -544,7 +547,7 @@ void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, i
 
 		if (prevInst != inst) { //output instrument data
 			if (delay != 0) {
-				calculateDelay(output, delay, speed, numOfRows);
+				calculateDelay(output, delay);
 				delay = 0;
 			}
 			prevInst = inst;
@@ -554,28 +557,28 @@ void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, i
 
 		if (fx1 != "...") { //output fx data
 			if (delay != 0) {
-				calculateDelay(output, delay, speed, numOfRows);
+				calculateDelay(output, delay);
 				delay = 0;
 			}
 			processEffect(output, fx1);
 		}
 		if (fx2 != "...") {
 			if (delay != 0) {
-				calculateDelay(output, delay, speed, numOfRows);
+				calculateDelay(output, delay);
 				delay = 0;
 			}
 			processEffect(output, fx2);
 		}
 		if (fx3 != "...") {
 			if (delay != 0) {
-				calculateDelay(output, delay, speed, numOfRows);
+				calculateDelay(output, delay);
 				delay = 0;
 			}
 			processEffect(output, fx3);
 		}
 		if (fx4 != "...") {
 			if (delay != 0) {
-				calculateDelay(output, delay, speed, numOfRows);
+				calculateDelay(output, delay);
 				delay = 0;
 			}
 			processEffect(output, fx4);
@@ -584,7 +587,7 @@ void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, i
 		delay++;
 	}
 	if (delay != 0) {
-		calculateDelay(output, delay, speed, numOfRows);
+		calculateDelay(output, delay);
 	}
 	output << "0xff" << endl; //end of row pattern flag
 	*prevVolume = prevVol;
@@ -596,8 +599,7 @@ void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, i
 void processEffect(ofstream& output, string fx) {
 	string type = fx.substr(0, 1);
 	int flag = EFFECTS.at(type);
-	//if (type != "G") { //the Gxx delay effect will be subtly implemented in the standard delays (0x67 - 0xE2)
-	if (type == "P" || type == "A" || type == "Q" || type == "R" || type == "V" || type == "1" || type == "2" || type == "3" || type == "0" || type == "4" || type == "7") {
+	if (type != "B" || type != "C" || type != "D" || type != "G" || type != "H" || type != "I" || type != "J" || type != "S" || type != "W" || type != "X" || type != "Y" || type != "Z") {
 		output << "0x" << setfill('0') << setw(2) << flag << ", "; //output the flag for the fx
 	}
 
@@ -638,8 +640,15 @@ void processEffect(ofstream& output, string fx) {
 	case 0xEE: //Dxx frame skip
 		break;
 	case 0xEF: //Exx volume
+		output << "0x" << setfill('0') << setw(2) << static_cast <int>(parameter) << ", ";
 		break;
 	case 0xF0: //Fxx speed and tempo
+		if (parameter > 0x1F) {
+			output << "ERROR: Fxx effect with a value not 0x00-0x1F" << endl;
+		}
+		else {
+			output << "0x" << setfill('0') << setw(2) << static_cast <int>(parameter) << ", ";
+		}
 		break;
 	case 0xF1: //Gxx note delay
 		break;
@@ -676,13 +685,12 @@ void processEffect(ofstream& output, string fx) {
 	}
 }
 
-void calculateDelay(ofstream& output, int delay, int speed, int numOfRows) {
-	int numOfCycles = delay * speed; //this is the number of NES frame sequences to wait. NES frame sequencer clocks at 60Hz (NTSC)
-	numOfCycles += VOLUME_LEVELS::Fifteen; //delay levels must range between the highest volume level (0x66) and the instrument flag (0xE3)
-	for (numOfCycles; numOfCycles >= 0xE3; numOfCycles -= (0xE3-VOLUME_LEVELS::Fifteen)) {
+void calculateDelay(ofstream& output, int delay) {
+	delay += VOLUME_LEVELS::Fifteen; //delay levels must range between the highest volume level (0x66) and the instrument flag (0xE3)
+	for (delay; delay >= 0xE3; delay -= (0xE3-VOLUME_LEVELS::Fifteen)) {
 		output << "0xe2, ";
 	}
-	output << "0x" << setfill('0') << setw(2) << hex << numOfCycles << ", ";
+	output << "0x" << setfill('0') << setw(2) << hex << delay << ", ";
 }
 
 int findMacroIndex(map<int, Macro*>* macros, Macro* macroTarget) {
