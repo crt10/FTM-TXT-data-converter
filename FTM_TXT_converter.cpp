@@ -80,7 +80,7 @@ struct Pattern {
 int calculateTicksPerRow(int tempo, int speed);
 void processRows(ofstream& output, vector<Row*>* rows, int channel, int speed, int numOfRows, int* prevVolume, int* volume, map<int, Instrument*>* instruments, int* prevInstrument, int* instrument);
 void processEffect(ofstream& output, string fx);
-void calculateDelay(ofstream& output, int delay);
+void calculateDelay(ofstream& output, int* delay);
 int findMacroIndex(map<int, Macro*>* macros, Macro* macroTarget);
 void processMacros(ofstream& output, map<int, Macro*>* macros, int macroType);
 void generateNoteTable(ofstream& output);
@@ -495,21 +495,35 @@ void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, i
 			}
 		}
 
+		if (rows->at(row)->channels.at(channel)->instrument != "..") { //get instrument data
+			inst = stoi(rows->at(row)->channels.at(channel)->instrument, NULL, 16);
+		}
+
 		string fx1 = rows->at(row)->channels.at(channel)->fx1; //get fx data
 		string fx2 = rows->at(row)->channels.at(channel)->fx2;
 		string fx3 = rows->at(row)->channels.at(channel)->fx3;
 		string fx4 = rows->at(row)->channels.at(channel)->fx4;
 
-		if (rows->at(row)->channels.at(channel)->instrument != "..") { //get instrument data
-			inst = stoi(rows->at(row)->channels.at(channel)->instrument, NULL, 16);
+		if (fx4.substr(0, 1) == "G") { //check for Gxx flag
+			calculateDelay(output, &delay);
+			output << "0xf1, " << "0x" << setfill('0') << setw(2) << fx4.substr(1, 2) << ", ";
+		}
+		else if (fx3.substr(0, 1) == "G") { //check for Gxx flag
+			calculateDelay(output, &delay);
+			output << "0xf1, " << "0x" << setfill('0') << setw(2) << fx3.substr(1, 2) << ", ";
+		}
+		else if (fx2.substr(0, 1) == "G") { //check for Gxx flag
+			calculateDelay(output, &delay);
+			output << "0xf1, " << "0x" << setfill('0') << setw(2) << fx2.substr(1, 2) << ", ";
+		}
+		else if (fx1.substr(0, 1) == "G") { //check for Gxx flag
+			calculateDelay(output, &delay);
+			output << "0xf1, " << "0x" << setfill('0') << setw(2) << fx1.substr(1, 2) << ", ";
 		}
 
 		if (noteNum != -1) { //output processed note data
 			if (noteNum == -2) {
-				if (delay != 0) {
-					calculateDelay(output, delay);
-					delay = 0;
-				}
+				calculateDelay(output, &delay);
 				if (vol != -1) { //if the channel is not silenced, silence the channel and store the most recent volume level in the pattern
 					prevVol = vol;
 					vol = -1; //-1 represents a silenced channel
@@ -517,17 +531,11 @@ void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, i
 				output << "0x" << setfill('0') << setw(2) << VOLUME_LEVELS::Zero << ", "; //"---" silences the channel
 			}
 			else if (noteNum == -3) {
-				if (delay != 0) {
-					calculateDelay(output, delay);
-					delay = 0;
-				}
+				calculateDelay(output, &delay);
 				output << "0xe4, "; //note release flag
 			}
 			else {
-				if (delay != 0) {
-					calculateDelay(output, delay);
-					delay = 0;
-				}
+				calculateDelay(output, &delay);
 				if (vol == -1) { //if the channel was silenced, unsilence the channel and use the most recent volume level in the pattern
 					vol = prevVol;
 					prevVol = -1;
@@ -537,58 +545,38 @@ void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, i
 		}
 
 		if ((prevVol != vol || rows->at(row)->channels.at(channel)->volume != ".") && vol != -1) { //output volume data
-			if (delay != 0) {
-				calculateDelay(output, delay);
-				delay = 0;
-			}
+			calculateDelay(output, &delay);
 			prevVol = vol;
 			output << "0x" << setfill('0') << setw(2) << vol + VOLUME_LEVELS::Zero << ", ";
 		}
 
 		if (prevInst != inst) { //output instrument data
-			if (delay != 0) {
-				calculateDelay(output, delay);
-				delay = 0;
-			}
+			calculateDelay(output, &delay);
 			prevInst = inst;
 			output << "0xe3, "; //instrument change flag
 			output << "0x" << setfill('0') << setw(2) << distance(instruments->begin(), instruments->find(inst)) << ", ";
 		}
 
 		if (fx1 != "...") { //output fx data
-			if (delay != 0) {
-				calculateDelay(output, delay);
-				delay = 0;
-			}
+			calculateDelay(output, &delay);
 			processEffect(output, fx1);
 		}
 		if (fx2 != "...") {
-			if (delay != 0) {
-				calculateDelay(output, delay);
-				delay = 0;
-			}
+			calculateDelay(output, &delay);
 			processEffect(output, fx2);
 		}
 		if (fx3 != "...") {
-			if (delay != 0) {
-				calculateDelay(output, delay);
-				delay = 0;
-			}
+			calculateDelay(output, &delay);
 			processEffect(output, fx3);
 		}
 		if (fx4 != "...") {
-			if (delay != 0) {
-				calculateDelay(output, delay);
-				delay = 0;
-			}
+			calculateDelay(output, &delay);
 			processEffect(output, fx4);
 		}
 
 		delay++;
 	}
-	if (delay != 0) {
-		calculateDelay(output, delay);
-	}
+	calculateDelay(output, &delay);
 	output << "0xff" << endl; //end of row pattern flag
 	*prevVolume = prevVol;
 	*volume = vol;
@@ -599,7 +587,7 @@ void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, i
 void processEffect(ofstream& output, string fx) {
 	string type = fx.substr(0, 1);
 	int flag = EFFECTS.at(type);
-	if (type != "B" || type != "C" || type != "D" || type != "G" || type != "H" || type != "I" || type != "J" || type != "S" || type != "W" || type != "X" || type != "Y" || type != "Z") {
+	if (type != "B" && type != "C" && type != "D" && type != "G" && type != "H" && type != "I" && type != "J" && type != "S" && type != "W" && type != "X" && type != "Y" && type != "Z") {
 		output << "0x" << setfill('0') << setw(2) << flag << ", "; //output the flag for the fx
 	}
 
@@ -685,12 +673,17 @@ void processEffect(ofstream& output, string fx) {
 	}
 }
 
-void calculateDelay(ofstream& output, int delay) {
-	delay += VOLUME_LEVELS::Fifteen; //delay levels must range between the highest volume level (0x66) and the instrument flag (0xE3)
-	for (delay; delay >= 0xE3; delay -= (0xE3-VOLUME_LEVELS::Fifteen)) {
-		output << "0xe2, ";
+void calculateDelay(ofstream& output, int* delay) {
+	int rows = *delay;
+	if (rows != 0) {
+		rows += VOLUME_LEVELS::Fifteen; //delay levels must range between the highest volume level (0x66) and the instrument flag (0xE3)
+		for (rows; rows >= 0xE3; rows -= (0xE3 - VOLUME_LEVELS::Fifteen)) {
+			output << "0xe2, ";
+		}
+		output << "0x" << setfill('0') << setw(2) << hex << rows << ", ";
+		rows = 0;
 	}
-	output << "0x" << setfill('0') << setw(2) << hex << delay << ", ";
+	*delay = rows;
 }
 
 int findMacroIndex(map<int, Macro*>* macros, Macro* macroTarget) {
