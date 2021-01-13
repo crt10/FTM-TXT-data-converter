@@ -79,7 +79,7 @@ struct Pattern {
 
 int calculateTicksPerRow(int tempo, int speed);
 void processRows(ofstream& output, vector<Row*>* rows, int channel, int speed, int numOfRows, int* prevVolume, int* volume, map<int, Instrument*>* instruments, int* prevInstrument, int* instrument);
-void processEffect(ofstream& output, string fx);
+void processEffect(ofstream& output, string fx, int* volume, int* prevVolume);
 void calculateDelay(ofstream& output, int* delay);
 int findMacroIndex(map<int, Macro*>* macros, Macro* macroTarget);
 void processMacros(ofstream& output, map<int, Macro*>* macros, int macroType);
@@ -87,7 +87,7 @@ void generateNoteTable(ofstream& output);
 void generateVibratoTable(ofstream& output);
 
 int main() {
-	string fileName = "Touhou 6 - Shanghai Teahouse -Chinise Tea-.txt";
+	string fileName = "fx_test.txt";
 	ifstream file(fileName); //some .txt files won't read properly without, ios::binary
 	ofstream output(fileName.substr(0, fileName.size() - 4) + "_OUTPUT.txt", std::ofstream::out | std::ofstream::trunc);
 
@@ -559,19 +559,19 @@ void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, i
 
 		if (fx1 != "...") { //output fx data
 			calculateDelay(output, &delay);
-			processEffect(output, fx1);
+			processEffect(output, fx1, &vol, &prevVol);
 		}
 		if (fx2 != "...") {
 			calculateDelay(output, &delay);
-			processEffect(output, fx2);
+			processEffect(output, fx2, &vol, &prevVol);
 		}
 		if (fx3 != "...") {
 			calculateDelay(output, &delay);
-			processEffect(output, fx3);
+			processEffect(output, fx3, &vol, &prevVol);
 		}
 		if (fx4 != "...") {
 			calculateDelay(output, &delay);
-			processEffect(output, fx4);
+			processEffect(output, fx4, &vol, &prevVol);
 		}
 
 		delay++;
@@ -584,10 +584,12 @@ void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, i
 	*instrument = inst;
 }
 
-void processEffect(ofstream& output, string fx) {
+void processEffect(ofstream& output, string fx, int* volume, int* prevVolume) {
+	int vol = *volume;
+	int prevVol = *prevVolume;
 	string type = fx.substr(0, 1);
 	int flag = EFFECTS.at(type);
-	if (type != "B" && type != "C" && type != "D" && type != "G" && type != "H" && type != "I" && type != "J" && type != "S" && type != "W" && type != "X" && type != "Y" && type != "Z") {
+	if (type != "B" && type != "C" && type != "D" && type != "G" && type != "H" && type != "I" && type != "J" && type != "W" && type != "X" && type != "Y" && type != "Z") {
 		output << "0x" << setfill('0') << setw(2) << flag << ", "; //output the flag for the fx
 	}
 
@@ -658,6 +660,13 @@ void processEffect(ofstream& output, string fx) {
 		output << "0x" << setfill('0') << setw(2) << static_cast <int>(parameter) << ", ";
 		break;
 	case 0xF9: //Sxx mute delay
+		if (vol != -1) { //if the channel is not silenced, silence the channel and store the most recent volume level in the pattern
+			prevVol = vol;
+			vol = -1; //-1 represents a silenced channel
+		}
+		output << "0x" << setfill('0') << setw(2) << static_cast <int>(parameter) << ", ";
+		calculateDelay(output, new int(1));
+		output << "0x" << setfill('0') << setw(2) << VOLUME_LEVELS::Zero << ", ";
 		break;
 	case 0xFA: //Vxx duty or noise mode
 		output << "0x" << setfill('0') << setw(2) << static_cast <int>(parameter) << ", ";
@@ -671,6 +680,8 @@ void processEffect(ofstream& output, string fx) {
 	case 0xFE: //DPCM delta counter
 		break;
 	}
+	*volume = vol;
+	*prevVolume = prevVol;
 }
 
 void calculateDelay(ofstream& output, int* delay) {
