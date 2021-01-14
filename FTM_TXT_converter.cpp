@@ -87,7 +87,7 @@ void generateNoteTable(ofstream& output);
 void generateVibratoTable(ofstream& output);
 
 int main() {
-	string fileName = "fx_test.txt";
+	string fileName = "Touhou 6 - Shanghai Teahouse -Chinise Tea-.txt";
 	ifstream file(fileName); //some .txt files won't read properly without, ios::binary
 	ofstream output(fileName.substr(0, fileName.size() - 4) + "_OUTPUT.txt", std::ofstream::out | std::ofstream::trunc);
 
@@ -377,6 +377,8 @@ int main() {
 			//PROCESS ALL TRACK DATA FOR OUTPUT
 			vector<int> channelsUsedPatterns[MAX_CHANNELS];
 
+			output << dec << "song" << songNumber << "_size: ";
+			output << hex << ".dw 0x" << setfill('0') << setw(4) << hex << frames.size() * 10 << endl << endl;
 			output << dec << "song" << songNumber << "_frames:" << endl; //song frames
 			for (int frame = 0; frame < (MAX_FRAMES>frames.size() ? frames.size() : MAX_FRAMES); frame++) {
 				output << "\t.dw ";
@@ -589,7 +591,7 @@ void processEffect(ofstream& output, string fx, int* volume, int* prevVolume) {
 	int prevVol = *prevVolume;
 	string type = fx.substr(0, 1);
 	int flag = EFFECTS.at(type);
-	if (type != "B" && type != "C" && type != "D" && type != "G" && type != "H" && type != "I" && type != "J" && type != "W" && type != "X" && type != "Y" && type != "Z") {
+	if (type != "G" && type != "H" && type != "I" && type != "J" && type != "W" && type != "X" && type != "Y" && type != "Z") {
 		output << "0x" << setfill('0') << setw(2) << flag << ", "; //output the flag for the fx
 	}
 
@@ -624,10 +626,13 @@ void processEffect(ofstream& output, string fx, int* volume, int* prevVolume) {
 		output << "0x" << setfill('0') << setw(2) << static_cast<int>(parameter) << ", ";
 		break;
 	case 0xEC: //Bxx pattern jump
+		output << "0x" << setfill('0') << setw(2) << static_cast <int>(parameter) << ", ";
 		break;
 	case 0xED: //Cxx halt
+		output << "0x" << setfill('0') << setw(2) << static_cast <int>(parameter) << ", ";
 		break;
 	case 0xEE: //Dxx frame skip
+		output << "0x" << setfill('0') << setw(2) << static_cast <int>(parameter) << ", ";
 		break;
 	case 0xEF: //Exx volume
 		output << "0x" << setfill('0') << setw(2) << static_cast <int>(parameter) << ", ";
