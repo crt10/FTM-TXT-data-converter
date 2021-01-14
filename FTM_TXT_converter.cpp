@@ -377,9 +377,8 @@ int main() {
 			//PROCESS ALL TRACK DATA FOR OUTPUT
 			vector<int> channelsUsedPatterns[MAX_CHANNELS];
 
-			output << dec << "song" << songNumber << "_size: ";
-			output << hex << ".dw 0x" << setfill('0') << setw(4) << hex << frames.size() * 10 << endl << endl;
 			output << dec << "song" << songNumber << "_frames:" << endl; //song frames
+			output << hex << "\t.dw 0x" << setfill('0') << setw(4) << frames.size() * 10 << dec << endl; //song size
 			for (int frame = 0; frame < (MAX_FRAMES>frames.size() ? frames.size() : MAX_FRAMES); frame++) {
 				output << "\t.dw ";
 				for (int i = 0; i < MAX_CHANNELS; i++) {
