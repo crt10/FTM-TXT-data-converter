@@ -378,7 +378,7 @@ int main() {
 			vector<int> channelsUsedPatterns[MAX_CHANNELS];
 
 			output << dec << "song" << songNumber << "_frames:" << endl; //song frames
-			output << hex << "\t.dw 0x" << setfill('0') << setw(4) << frames.size() * 10 << dec << endl; //song size
+			output << hex << "\t.dw 0x" << setfill('0') << setw(4) << frames.size() * 10 + 2 << dec << endl; //song size
 			for (int frame = 0; frame < (MAX_FRAMES>frames.size() ? frames.size() : MAX_FRAMES); frame++) {
 				output << "\t.dw ";
 				for (int i = 0; i < MAX_CHANNELS; i++) {
