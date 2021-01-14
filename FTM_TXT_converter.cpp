@@ -87,7 +87,7 @@ void generateNoteTable(ofstream& output);
 void generateVibratoTable(ofstream& output);
 
 int main() {
-	string fileName = "Touhou 6 - Shanghai Teahouse -Chinise Tea-.txt";
+	string fileName = "corridorsoftime.txt";
 	ifstream file(fileName); //some .txt files won't read properly without, ios::binary
 	ofstream output(fileName.substr(0, fileName.size() - 4) + "_OUTPUT.txt", std::ofstream::out | std::ofstream::trunc);
 
@@ -655,7 +655,7 @@ void processEffect(ofstream& output, string fx, int* volume, int* prevVolume) {
 	case 0xF5: //Jxx FDS modulation speed
 		break;
 	case 0xF6: //Pxx fine pitch
-		output << "0x" << setfill('0') << setw(2) << static_cast < int>(0x80-parameter) << ", ";
+		output << "0x" << setfill('0') << setw(2) << static_cast <int>((uint8_t)(0x80-parameter)) << ", ";
 		break;
 	case 0xF7: //Qxy note slide up
 		output << "0x" << setfill('0') << setw(2) << static_cast <int>(parameter) << ", ";
