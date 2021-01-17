@@ -85,9 +85,10 @@ int findMacroIndex(map<int, Macro*>* macros, Macro* macroTarget);
 void processMacros(ofstream& output, map<int, Macro*>* macros, int macroType);
 void generateNoteTable(ofstream& output);
 void generateVibratoTable(ofstream& output);
+void generatePulseVolumeTable(ofstream& output);
 
 int main() {
-	string fileName = "Touhou 6 - Shanghai Teahouse -Chinise Tea-.txt";
+	string fileName = "zelda.txt";
 	ifstream file(fileName); //some .txt files won't read properly without, ios::binary
 	ofstream output(fileName.substr(0, fileName.size() - 4) + "_OUTPUT.txt", std::ofstream::out | std::ofstream::trunc);
 
@@ -98,6 +99,7 @@ int main() {
 
 	generateNoteTable(output);
 	generateVibratoTable(output);
+	generatePulseVolumeTable(output);
 
 	//READ AND STORE MACRO DATA
 	map<int, Macro*> volumeMacros;
@@ -313,7 +315,7 @@ int main() {
 							Row* row = new Row;
 
 							ss >> data >> data;
-							for (int maxChannels = 5; maxChannels > 0; maxChannels--) {
+							for (int maxChannels = MAX_CHANNELS; maxChannels > 0; maxChannels--) {
 								Channel* channel = new Channel;
 								string note, instrument, volume, fx1, fx2, fx3, fx4;
 								ss >> note >> instrument >> volume >> fx1;
@@ -784,6 +786,7 @@ void generateNoteTable(ofstream& output) {
 		double frequency = a * pow(ratio, i) * 2;  //*2 because famitracker notes are calculated with twice the frequency of the note
 		int timerPeriod = round((11.1746014718 * ( (1789773.0) / (16 * frequency) )));
 		output << "0x" << setfill('0') << setw(4) << hex << timerPeriod;
+
 		if (i != 2) {
 			output << ", ";
 		}
@@ -796,9 +799,11 @@ void generateNoteTable(ofstream& output) {
 			if (o == 12) {
 				a *= 2;
 			}
+
 			double frequency = a * pow(ratio, o%12) * 2; //*2 because famitracker notes are calculated with twice the frequency of the note
 			int timerPeriod = round(11.1746014718 * ((1789773.0) / (16 * frequency)));
 			output << "0x" << setfill('0') << setw(4) << hex << timerPeriod;
+
 			if (o != 14) {
 				output << ", ";
 			}
@@ -817,11 +822,33 @@ void generateVibratoTable(ofstream& output) {
 			double angle = (double(j) / 16.0) * (3.1415 / 2.0);
 			value = int(sin(angle) * VIBRATO_DEPTH[i]);
 			output << "0x" << setfill('0') << setw(2) << hex << value;
+
 			if (j != 15) {
 				output << ", ";
 			}
 		}
 		output << endl;
+	}
+	output << endl;
+}
+
+//https://wiki.nesdev.com/w/index.php/APU_Mixer
+void generatePulseVolumeTable(ofstream& output) {
+	output << "pulse_volume_table: " << endl;
+	for (int i = 0; i < 31; i++) {
+		if (i % 8 == 0) {
+			output << "\t.db ";
+		}
+
+		int volume = round((95.52 / (8128.0 / i + 100)) * 255);
+		output << "0x" << setfill('0') << setw(2) << hex << volume;
+
+		if (i % 8 != 7 && i != 30) {
+			output << ", ";
+		}
+		else {
+			output << endl;
+		}
 	}
 	output << endl;
 }
