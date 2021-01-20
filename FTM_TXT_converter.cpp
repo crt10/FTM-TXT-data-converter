@@ -89,7 +89,7 @@ void generatePulseVolumeTable(ofstream& output);
 void generateTNDVolumeTable(ofstream& output);
 
 int main() {
-	string fileName = "mario.txt";
+	string fileName = "Touhou 6 - Shanghai Teahouse -Chinise Tea-.txt";
 	ifstream file(fileName); //some .txt files won't read properly without, ios::binary
 	ofstream output(fileName.substr(0, fileName.size() - 4) + "_OUTPUT.txt", std::ofstream::out | std::ofstream::trunc);
 
@@ -407,10 +407,10 @@ int main() {
 				output << "song" << songNumber << "_channel" << i << "_patterns:" << endl;
 				int prevVolume = -1; //-1 represents a silenced channel
 				int volume = 15;
-				int prevInstrument = -1;
-				int instrument = 0;
 				for (int pattern = 0; pattern < channelsUsedPatterns[i].size(); pattern++) {
 					output << "\tsong" << songNumber << "_channel" << i << "_pattern" << channelsUsedPatterns[i][pattern] << ": .db ";
+					int prevInstrument = -1;
+					int instrument = 0;
 					if (i == 0 && pattern == 0) {
 						output << "0xf0, " << "0x" << setfill('0') << setw(2) << hex << speed << ", ";
 					}
