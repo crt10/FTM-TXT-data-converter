@@ -86,9 +86,10 @@ void processMacros(ofstream& output, map<int, Macro*>* macros, int macroType);
 void generateNoteTable(ofstream& output);
 void generateVibratoTable(ofstream& output);
 void generatePulseVolumeTable(ofstream& output);
+void generateTNDVolumeTable(ofstream& output);
 
 int main() {
-	string fileName = "zelda.txt";
+	string fileName = "mario.txt";
 	ifstream file(fileName); //some .txt files won't read properly without, ios::binary
 	ofstream output(fileName.substr(0, fileName.size() - 4) + "_OUTPUT.txt", std::ofstream::out | std::ofstream::trunc);
 
@@ -100,6 +101,7 @@ int main() {
 	generateNoteTable(output);
 	generateVibratoTable(output);
 	generatePulseVolumeTable(output);
+	generateTNDVolumeTable(output);
 
 	//READ AND STORE MACRO DATA
 	map<int, Macro*> volumeMacros;
@@ -844,6 +846,26 @@ void generatePulseVolumeTable(ofstream& output) {
 		output << "0x" << setfill('0') << setw(2) << hex << volume;
 
 		if (i % 8 != 7 && i != 30) {
+			output << ", ";
+		}
+		else {
+			output << endl;
+		}
+	}
+	output << endl;
+}
+
+void generateTNDVolumeTable(ofstream& output) {
+	output << "tnd_volume_table: " << endl;
+	for (int i = 0; i < 203; i++) {
+		if (i % 8 == 0) {
+			output << "\t.db ";
+		}
+
+		int volume = round((163.67 / (24329.0 / i + 100)) * 255);
+		output << "0x" << setfill('0') << setw(2) << hex << volume;
+
+		if (i % 8 != 7 && i != 202) {
 			output << ", ";
 		}
 		else {
