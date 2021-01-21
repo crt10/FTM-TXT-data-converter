@@ -89,7 +89,7 @@ void generatePulseVolumeTable(ofstream& output);
 void generateTNDVolumeTable(ofstream& output);
 
 int main() {
-	string fileName = "Touhou 10.5 - The Ground's Color Is Yellow.txt";
+	string fileName = "Touhou 13 - Desire Drive.txt";
 	ifstream file(fileName); //some .txt files won't read properly without, ios::binary
 	ofstream output(fileName.substr(0, fileName.size() - 4) + "_OUTPUT.txt", std::ofstream::out | std::ofstream::trunc);
 
@@ -477,6 +477,7 @@ int calculateTicksPerRow(int tempo, int ticksPerRow) {
 
 void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, int numOfRows, int *prevVolume, int* volume, map<int, Instrument*>* instruments, int* prevInstrument, int* instrument) {
 	output << hex;
+	bool emptyPattern = true;
 	int noteNum = -1;
 	int delay = 0;
 	int prevVol = *prevVolume;
@@ -546,10 +547,11 @@ void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, i
 					prevVol = -1;
 				}
 				output << "0x" << setfill('0') << setw(2) << noteNum << ", ";
+				emptyPattern = false;
 			}
 		}
 
-		if ((prevVol != vol || rows->at(row)->channels.at(channel)->volume != ".") && vol != -1) { //output volume data
+		if ((prevVol != vol || rows->at(row)->channels.at(channel)->volume != ".") && vol != -1 && !emptyPattern) { //output volume data
 			calculateDelay(output, &delay);
 			prevVol = vol;
 			output << "0x" << setfill('0') << setw(2) << vol + VOLUME_LEVELS::Zero << ", ";
