@@ -23,6 +23,12 @@ const unordered_map<string, int> NOTES = {
 	{"...", -1},  {"---", -2}, {"===", -3}
 };
 
+const unordered_map<string, int> NOISE_NOTES = {
+	{"0-#", 0x00}, {"1-#", 0x01}, {"2-#", 0x02}, {"3-#", 0x03}, {"4-#", 0x04}, {"5-#", 0x05}, {"6-#", 0x06}, {"7-#", 0x07},
+	{"8-#", 0x08}, {"9-#", 0x09}, {"A-#", 0x0A}, {"B-#", 0x0B}, {"C-#", 0x0C}, {"D-#", 0x0D}, {"E-#", 0x0E}, {"F-#", 0x0F},
+	{"...", -1},  {"---", -2}, {"===", -3}
+};
+
 enum VOLUME_LEVELS {
 	Zero = 0x57, One, Two, Three, Four, Five, Six, Seven, Eight, Nine, Ten, Eleven, Twelve, Thirteen, Fourteen, Fifteen //Fifteen == 0x66, if Zero == 0x57
 };
@@ -490,11 +496,21 @@ void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, i
 	int prevInst = *prevInstrument;
 	int inst = *instrument;
 	for (int row = 0; row < rows->size(); row++) { //loop through each row
-		if (NOTES.find(rows->at(row)->channels.at(channel)->note) == NOTES.end()) { //get note data
-			cout << "WARNING: Notes must range between C-0 to B-7. A note higher than B-7 was found and will be ignored." << endl;
+		if (channel != 3) {
+			if (NOTES.find(rows->at(row)->channels.at(channel)->note) == NOTES.end()) { //get note data
+				cout << "WARNING: Notes must range between C-0 to B-7. A note higher than B-7 was found and will be ignored." << endl;
+			}
+			else {
+				noteNum = NOTES.at(rows->at(row)->channels.at(channel)->note);
+			}
 		}
 		else {
-			noteNum = NOTES.at(rows->at(row)->channels.at(channel)->note);
+			if (NOISE_NOTES.find(rows->at(row)->channels.at(channel)->note) == NOISE_NOTES.end()) { //get note data
+				cout << "WARNING: Noise periods must range between 0-# to F-#. An invalid period was found and will be ignored." << endl;
+			}
+			else {
+				noteNum = NOISE_NOTES.at(rows->at(row)->channels.at(channel)->note);
+			}
 		}
 
 		if (rows->at(row)->channels.at(channel)->volume != ".") { //get volume data
