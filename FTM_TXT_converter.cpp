@@ -35,6 +35,9 @@ const unordered_map<string, int> EFFECTS = {
 //vibrato table: http://famitracker.com/wiki/index.php?title=4xy
 const int VIBRATO_DEPTH[16] = { 0x01, 0x03, 0x05, 0x07, 0x09, 0x0D, 0x13, 0x17, 0x1B, 0x21, 0x2B, 0x3B, 0x57, 0x7F, 0xBF, 0xFF };
 
+//https://wiki.nesdev.com/w/index.php/APU_Noise
+const int NOISE_PERIOD[16] = { 4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068 };
+
 const int MAX_INSTRUMENTS = 255;
 const int MAX_CHANNELS = 5;
 const int MAX_FRAMES = (pow(2, 16)-1)/2 / MAX_CHANNELS; //we are using 16 bytes for offsetting frames. since we are grabbing byte data, we must *2 in avr, which gives us half the maximum number of offsets
@@ -84,12 +87,13 @@ void calculateDelay(ofstream& output, int* delay);
 int findMacroIndex(map<int, Macro*>* macros, Macro* macroTarget);
 void processMacros(ofstream& output, map<int, Macro*>* macros, int macroType);
 void generateNoteTable(ofstream& output);
+void generateNoisePeriodTable(ofstream& output);
 void generateVibratoTable(ofstream& output);
 void generatePulseVolumeTable(ofstream& output);
 void generateTNDVolumeTable(ofstream& output);
 
 int main() {
-	string fileName = "Touhou 13 - Desire Drive.txt";
+	string fileName = "Touhou 6 - Shanghai Teahouse -Chinise Tea-.txt";
 	ifstream file(fileName); //some .txt files won't read properly without, ios::binary
 	ofstream output(fileName.substr(0, fileName.size() - 4) + "_OUTPUT.txt", std::ofstream::out | std::ofstream::trunc);
 
@@ -99,6 +103,7 @@ int main() {
 	}
 
 	generateNoteTable(output);
+	generateNoisePeriodTable(output);
 	generateVibratoTable(output);
 	generatePulseVolumeTable(output);
 	generateTNDVolumeTable(output);
@@ -813,6 +818,20 @@ void generateNoteTable(ofstream& output) {
 			}
 		}
 		output << endl;
+	}
+	output << endl;
+}
+
+void generateNoisePeriodTable(ofstream& output) {
+	output << "noise_period_table: .dw ";
+	for (int i = 0; i < 16; i++) {
+		output << "0x" << setfill('0') << setw(4) << hex << (uint16_t)(NOISE_PERIOD[i] * 11.1746014718);
+		if (i != 15) {
+			output << ", ";
+		}
+		else {
+			output << endl;
+		}
 	}
 	output << endl;
 }
