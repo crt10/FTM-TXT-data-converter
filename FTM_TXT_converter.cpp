@@ -23,9 +23,10 @@ const unordered_map<string, int> NOTES = {
 	{"...", -1},  {"---", -2}, {"===", -3}
 };
 
+//for some reason, famitracker flips the period bits so 0-# represents an F in the register.
 const unordered_map<string, int> NOISE_NOTES = {
-	{"0-#", 0x00}, {"1-#", 0x01}, {"2-#", 0x02}, {"3-#", 0x03}, {"4-#", 0x04}, {"5-#", 0x05}, {"6-#", 0x06}, {"7-#", 0x07},
-	{"8-#", 0x08}, {"9-#", 0x09}, {"A-#", 0x0A}, {"B-#", 0x0B}, {"C-#", 0x0C}, {"D-#", 0x0D}, {"E-#", 0x0E}, {"F-#", 0x0F},
+	{"0-#", 0x0F}, {"1-#", 0x0E}, {"2-#", 0x0D}, {"3-#", 0x0C}, {"4-#", 0x0B}, {"5-#", 0x0A}, {"6-#", 0x09}, {"7-#", 0x08},
+	{"8-#", 0x07}, {"9-#", 0x06}, {"A-#", 0x05}, {"B-#", 0x04}, {"C-#", 0x03}, {"D-#", 0x02}, {"E-#", 0x01}, {"F-#", 0x00},
 	{"...", -1},  {"---", -2}, {"===", -3}
 };
 
@@ -99,7 +100,7 @@ void generatePulseVolumeTable(ofstream& output);
 void generateTNDVolumeTable(ofstream& output);
 
 int main() {
-	string fileName = "Touhou 6 - Shanghai Teahouse -Chinise Tea-.txt";
+	string fileName = "noise_test.txt";
 	ifstream file(fileName); //some .txt files won't read properly without, ios::binary
 	ofstream output(fileName.substr(0, fileName.size() - 4) + "_OUTPUT.txt", std::ofstream::out | std::ofstream::trunc);
 
@@ -838,10 +839,11 @@ void generateNoteTable(ofstream& output) {
 	output << endl;
 }
 
+//unsure if the period table on the NES wiki is incorrect or not, but dividing the periods by 2 hits the correct frequencies.
 void generateNoisePeriodTable(ofstream& output) {
 	output << "noise_period_table: .dw ";
 	for (int i = 0; i < 16; i++) {
-		output << "0x" << setfill('0') << setw(4) << hex << (uint16_t)(NOISE_PERIOD[i] * 11.1746014718);
+		output << "0x" << setfill('0') << setw(4) << hex << (uint16_t)((NOISE_PERIOD[i]/2+1) * 11.1746014718);
 		if (i != 15) {
 			output << ", ";
 		}
