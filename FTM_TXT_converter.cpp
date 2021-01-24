@@ -40,7 +40,8 @@ const unordered_map<string, int> EFFECTS = {
 };
 
 //vibrato table: http://famitracker.com/wiki/index.php?title=4xy
-const int VIBRATO_DEPTH[16] = { 0x01, 0x03, 0x05, 0x07, 0x09, 0x0D, 0x13, 0x17, 0x1B, 0x21, 0x2B, 0x3B, 0x57, 0x7F, 0xBF, 0xFF };
+const int VIBRATO_DEPTH[16] = { 1.0, 1.5, 2.5, 4.0, 5.0, 7.0, 10.0, 12.0, 14.0, 17.0, 22.0, 30.0, 44.0, 64.0, 96.0, 128.0 };
+const double OLD_VIBRATO_DEPTH[16] = { 1.0, 1.0, 2.0, 3.0, 4.0, 7.0, 8.0, 15.0, 16.0, 31.0, 32.0, 63.0, 64.0, 127.0, 128.0, 255.0 };
 
 //https://wiki.nesdev.com/w/index.php/APU_Noise
 const int NOISE_PERIOD[16] = { 4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068 };
@@ -100,7 +101,7 @@ void generatePulseVolumeTable(ofstream& output);
 void generateTNDVolumeTable(ofstream& output);
 
 int main() {
-	string fileName = "noise_test.txt";
+	string fileName = "Touhou 10.5 - Eastern Sky of Scarlet Perception.txt";
 	ifstream file(fileName); //some .txt files won't read properly without, ios::binary
 	ofstream output(fileName.substr(0, fileName.size() - 4) + "_OUTPUT.txt", std::ofstream::out | std::ofstream::trunc);
 
@@ -861,7 +862,8 @@ void generateVibratoTable(ofstream& output) {
 		for (int j = 0; j < 16; ++j) {   // phase
 			int value = 0;
 			double angle = (double(j) / 16.0) * (3.1415 / 2.0);
-			value = int(sin(angle) * VIBRATO_DEPTH[i]);
+			value = int(sin(angle) * VIBRATO_DEPTH[i]); //new vibrato table
+			//value = (int)((double(j * OLD_VIBRATO_DEPTH[i]) / 16.0) + 1);
 			output << "0x" << setfill('0') << setw(2) << hex << value;
 
 			if (j != 15) {
