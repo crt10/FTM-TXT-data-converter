@@ -30,6 +30,11 @@ const unordered_map<string, int> NOISE_NOTES = {
 	{"...", -1},  {"---", -2}, {"===", -3}
 };
 
+const unordered_map<string, int> DPCM_NOTES = {
+	{"C-", 0}, {"C#", 1}, {"D-", 2}, {"D#", 3}, {"E-", 4}, {"F-", 5}, {"F#", 6}, {"G-", 7}, {"G#", 8}, {"A-", 9}, {"A#", 10}, {"B-0", 11},
+	{"..", -1},  {"--", -2}, {"==", -3}
+};
+
 enum VOLUME_LEVELS {
 	Zero = 0x57, One, Two, Three, Four, Five, Six, Seven, Eight, Nine, Ten, Eleven, Twelve, Thirteen, Fourteen, Fifteen //Fifteen == 0x66, if Zero == 0x57
 };
@@ -46,6 +51,7 @@ const double OLD_VIBRATO_DEPTH[16] = { 1.0, 1.0, 2.0, 3.0, 4.0, 7.0, 8.0, 15.0, 
 //https://wiki.nesdev.com/w/index.php/APU_Noise
 const int NOISE_PERIOD[16] = { 4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068 };
 
+const int MAX_DPCM = 255;
 const int MAX_INSTRUMENTS = 255;
 const int MAX_CHANNELS = 5;
 const int MAX_FRAMES = (pow(2, 16)-1)/2 / MAX_CHANNELS; //we are using 16 bytes for offsetting frames. since we are grabbing byte data, we must *2 in avr, which gives us half the maximum number of offsets
@@ -58,12 +64,28 @@ struct Macro {
 	vector<uint8_t> values;
 };
 
+struct DPCMSample {
+	int id = -1;
+	int length = -1;
+	vector<int> samples;
+};
+
 struct Instrument {
 	Macro* volume = NULL;
 	Macro* arpeggio = NULL;
 	Macro* pitch = NULL;
 	Macro* hiPitch = NULL;
 	Macro* duty = NULL;
+};
+
+struct DPCMKey {
+	int octave = -1;
+	int note = -1;
+	int dpcmID = -1;
+	int pitch = -1;
+	int loop = -1;
+	int unknown = -1;
+	int dCounter = -1;
 };
 
 struct Frame {
@@ -89,7 +111,7 @@ struct Pattern {
 };
 
 int calculateTicksPerRow(int tempo, int speed);
-void processRows(ofstream& output, vector<Row*>* rows, int channel, int speed, int numOfRows, int* prevVolume, int* volume, map<int, Instrument*>* instruments, int* prevInstrument, int* instrument);
+void processRows(ofstream& output, vector<Row*>* rows, int channel, int speed, int numOfRows, int* prevVolume, int* volume, map<int, Instrument*>* instruments, int* prevInstrument, int* instrument, map<int, vector<DPCMKey*>*>* dpcmKeys);
 void processEffect(ofstream& output, string fx, int* volume, int* prevVolume);
 void calculateDelay(ofstream& output, int* delay);
 int findMacroIndex(map<int, Macro*>* macros, Macro* macroTarget);
@@ -101,7 +123,7 @@ void generatePulseVolumeTable(ofstream& output);
 void generateTNDVolumeTable(ofstream& output);
 
 int main() {
-	string fileName = "Touhou 10.5 - Eastern Sky of Scarlet Perception.txt";
+	string fileName = "Corridors of Time.txt";
 	ifstream file(fileName); //some .txt files won't read properly without, ios::binary
 	ofstream output(fileName.substr(0, fileName.size() - 4) + "_OUTPUT.txt", std::ofstream::out | std::ofstream::trunc);
 
@@ -179,10 +201,55 @@ int main() {
 	//	cout << x.first << " " << x.second->values.back() << endl;
 	//}
 
-	//READ AND STORE DPCM DATA (unimplemented)
+	//READ AND STORE DPCM DATA
+	vector<DPCMSample*> dpcmSamples;
+
+	while (getline(file, line)) {
+		if (line == "# DPCM samples") {
+			break;
+		}
+	}
+	while (getline(file, line)) {
+		istringstream ss(line);
+		string data;
+		ss >> data;
+		if (data != "DPCMDEF") {
+			if (data != "") {
+				cout << "ERROR: Expected DPCMDEF but recieved " << data << "." << endl;
+			}
+			break;
+		}
+
+		int dpcmID, dpcmLength;
+		vector<int> samples;
+		ss >> dpcmID >> dpcmLength;
+		for (int i = 0; i < dpcmLength; i++) {
+			if (i % 32 == 0) {
+				getline(file, line);
+				ss.str(line);
+				ss.clear();
+				ss >> data >> data;					//get rid of "DPCM : "
+			}
+			ss >> data;
+			samples.push_back(stoi(data, NULL, 16));
+		}
+
+		DPCMSample* sample = new DPCMSample;
+		sample->id = dpcmID;
+		sample->length = dpcmLength;
+		sample->samples = samples;
+		if (dpcmSamples.size() > MAX_DPCM) {
+			cout << "ERROR: More than " << MAX_DPCM << " DPCM samples detected." << endl;
+			exit(1);
+		}
+		else {
+			dpcmSamples.push_back(sample);
+		}
+	}
 
 	//READ AND STORE INSTRUMENT DATA
 	map<int, Instrument*> instruments;
+	map<int, vector<DPCMKey*>*> dpcmKeys;
 
 	while (getline(file, line)) {
 		if (line == "# Instruments") {
@@ -196,34 +263,54 @@ int main() {
 		if (data != "INST2A03" && data != "KEYDPCM") {
 			if (data != "") {
 				cout << "ERROR: Non-INST2A03 instrument found." << endl;
+				exit(1);
 			}
 			break;
 		}
 
-		int id, volumeID, arpeggioID, pitchID, hiPitchID, dutyID;
-		ss >> id >> volumeID >> arpeggioID >> pitchID >> hiPitchID >> dutyID;
-		Instrument* instrument = new Instrument;
-		if (volumeMacros.count(volumeID) != 0) {
-			instrument->volume = volumeMacros.at(volumeID);
-		}
-		if (arpeggioMacros.count(arpeggioID) != 0) {
-			instrument->arpeggio = arpeggioMacros.at(arpeggioID);
-		}
-		if (pitchMacros.count(pitchID) != 0) {
-			instrument->pitch = pitchMacros.at(pitchID);
-		}
-		if (hiPitchMacros.count(hiPitchID) != 0) {
-			instrument->hiPitch = hiPitchMacros.at(hiPitchID);
-		}
-		if (dutyMacros.count(dutyID) != 0) {
-			instrument->duty = dutyMacros.at(dutyID);
-		}
-		if (instruments.size() > MAX_INSTRUMENTS) {
-			cout << "ERROR: More than " << MAX_INSTRUMENTS << " instruments detected. Tip: Delete any unused instruments in Edit > Clean up." << endl;
-			exit(1);
+		if (data == "INST2A03") {
+			int id, volumeID, arpeggioID, pitchID, hiPitchID, dutyID;
+			ss >> id >> volumeID >> arpeggioID >> pitchID >> hiPitchID >> dutyID;
+			Instrument* instrument = new Instrument;
+			if (volumeMacros.count(volumeID) != 0) {
+				instrument->volume = volumeMacros.at(volumeID);
+			}
+			if (arpeggioMacros.count(arpeggioID) != 0) {
+				instrument->arpeggio = arpeggioMacros.at(arpeggioID);
+			}
+			if (pitchMacros.count(pitchID) != 0) {
+				instrument->pitch = pitchMacros.at(pitchID);
+			}
+			if (hiPitchMacros.count(hiPitchID) != 0) {
+				instrument->hiPitch = hiPitchMacros.at(hiPitchID);
+			}
+			if (dutyMacros.count(dutyID) != 0) {
+				instrument->duty = dutyMacros.at(dutyID);
+			}
+
+			if (instruments.size() > MAX_INSTRUMENTS) {
+				cout << "ERROR: More than " << MAX_INSTRUMENTS << " instruments detected. Tip: Delete any unused instruments in Edit > Clean up." << endl;
+				exit(1);
+			}
+			else {
+				instruments.insert({ id, instrument });
+			}
 		}
 		else {
-			instruments.insert({ id, instrument });
+			int instID, octave, note, dpcmID, pitch, loop, unknown, dCounter;
+			ss >> instID >> octave >> note >> dpcmID >> pitch >> loop >> unknown >> dCounter;
+			DPCMKey* key = new DPCMKey;
+			key->octave = octave;
+			key->note = note;
+			key->dpcmID = dpcmID;
+			key->pitch = pitch;
+			key->loop = loop;
+			key->unknown = unknown;
+			key->dCounter = dCounter;
+			if (dpcmKeys.find(instID) == dpcmKeys.end()) {
+				dpcmKeys.insert({ instID, new vector<DPCMKey*> });
+			}
+			dpcmKeys.at(instID)->push_back(key);
 		}
 	}
 
@@ -427,15 +514,42 @@ int main() {
 					if (i == 0 && pattern == 0) {
 						output << "0xf0, " << "0x" << setfill('0') << setw(2) << hex << speed << ", ";
 					}
-					processRows(output, &patterns[channelsUsedPatterns[i][pattern]]->rows, i, speed, numOfRows, &prevVolume, &volume, &instruments, &prevInstrument, &instrument);
+					processRows(output, &patterns[channelsUsedPatterns[i][pattern]]->rows, i, speed, numOfRows, &prevVolume, &volume, &instruments, &prevInstrument, &instrument, &dpcmKeys);
 					output << dec;
 				}
 				output << endl;
 			}
 		}
 	}
+
+	//PROCESS ALL DPCM SMAPLES
+	output << "dpcm_samples:" << endl;
+	for (int i = 0; i < dpcmSamples.size(); i++) {
+		output << "\t.dw dcpm_sample_" << i << endl;
+	}
+	output << endl;
+	for (int i = 0; i < dpcmSamples.size(); i++) {
+		output << "dcpm_sample_" << i << ":" << endl;
+		vector<int> sample = dpcmSamples.at(i)->samples;
+		output << hex << "\t.db " << "0x" << setfill('0') << setw(2) << static_cast <int>(dpcmSamples.at(i)->length/16) << endl;
+		for (int o = 0; o < sample.size(); o++) {
+			if (o % 16 == 0) {
+				output << "\t.db ";
+			}
+			output << "0x" << setfill('0') << setw(2) << static_cast <int>(sample[o]);
+			if (o % 16 != 15 && o != sample.size()-1) {
+				output << ", ";
+			}
+			else {
+				output << endl;
+			}
+		}
+		output << dec;
+	}
+	output << endl;
+
 	//PROCESS ALL INSTRUMENT/MACRO DATA
-	output << "instruments:"<< endl;
+	output << "instruments:" << endl;
 	for (int i = 0; i < instruments.size(); i++) {
 		output << "\t.dw instrument" << i << endl;
 	}
@@ -488,7 +602,7 @@ int calculateTicksPerRow(int tempo, int ticksPerRow) {
 	return multiplierTempo * ticksPerRow;
 }
 
-void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, int numOfRows, int *prevVolume, int* volume, map<int, Instrument*>* instruments, int* prevInstrument, int* instrument) {
+void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, int numOfRows, int *prevVolume, int* volume, map<int, Instrument*>* instruments, int* prevInstrument, int* instrument, map<int, vector<DPCMKey*>*>* dpcmKeys) {
 	output << hex;
 	bool emptyPattern = true;
 	int noteNum = -1;
@@ -497,21 +611,54 @@ void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, i
 	int vol = *volume;
 	int prevInst = *prevInstrument;
 	int inst = *instrument;
+	int dcpm = -1;
 	for (int row = 0; row < rows->size(); row++) { //loop through each row
-		if (channel != 3) {
-			if (NOTES.find(rows->at(row)->channels.at(channel)->note) == NOTES.end()) { //get note data
-				cout << "WARNING: Notes must range between C-0 to B-7. A note higher than B-7 was found and will be ignored." << endl;
-			}
-			else {
-				noteNum = NOTES.at(rows->at(row)->channels.at(channel)->note);
-			}
+		if (rows->at(row)->channels.at(channel)->instrument != "..") { //get instrument data
+			inst = stoi(rows->at(row)->channels.at(channel)->instrument, NULL, 16);
 		}
-		else {
+
+		if (channel == 3) {							//noise channel
 			if (NOISE_NOTES.find(rows->at(row)->channels.at(channel)->note) == NOISE_NOTES.end()) { //get note data
 				cout << "WARNING: Noise periods must range between 0-# to F-#. An invalid period was found and will be ignored." << endl;
+				noteNum = -1;
 			}
 			else {
 				noteNum = NOISE_NOTES.at(rows->at(row)->channels.at(channel)->note);
+			}
+		}
+		else if (channel == 4) {					//DPCM channel
+			string dpcmNote = rows->at(row)->channels.at(channel)->note;
+			if (DPCM_NOTES.find(dpcmNote.substr(0, 2)) == DPCM_NOTES.end()) {	//get note data
+				cout << "WARNING: DPCM notes must range between C-0 to B-7. An invalid note was found and will be ignored." << endl;
+				noteNum = -1;
+			}
+			else {
+				noteNum = DPCM_NOTES.at(dpcmNote.substr(0, 2));
+				if (noteNum != -1 && noteNum != -2 && noteNum != -3) {
+					int dpcmNoteInt = noteNum;
+					int dpcmOctave = stoi(dpcmNote.substr(2, 3));
+					if (dpcmKeys->find(inst) == dpcmKeys->end()) {					//find corresponding DPCM key with instrument
+						cout << "Warning: No existing DPCM keys associated with instrument " << inst << ". DPCM sample will be ignored" << endl;
+						noteNum = -1;
+					}
+					else {
+						for (auto x : *dpcmKeys->at(inst)) {
+							if (x->note == dpcmNoteInt && x->octave == dpcmOctave) {
+								noteNum = x->dpcmID;
+								dcpm = x->pitch;
+							}
+						}
+					}
+				}
+			}
+		}
+		else {										//pulse, triangle channel
+			if (NOTES.find(rows->at(row)->channels.at(channel)->note) == NOTES.end()) { //get note data
+				cout << "WARNING: Notes must range between C-0 to B-7. A note higher than B-7 was found and will be ignored." << endl;
+				noteNum = -1;
+			}
+			else {
+				noteNum = NOTES.at(rows->at(row)->channels.at(channel)->note);
 			}
 		}
 
@@ -522,10 +669,6 @@ void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, i
 			else { //if the channel is silenced, only change the prevVol value. vol has to stay -1 in order to represent a silenced channel.
 				prevVol = stoi(rows->at(row)->channels.at(channel)->volume, NULL, 16);
 			}
-		}
-
-		if (rows->at(row)->channels.at(channel)->instrument != "..") { //get instrument data
-			inst = stoi(rows->at(row)->channels.at(channel)->instrument, NULL, 16);
 		}
 
 		string fx1 = rows->at(row)->channels.at(channel)->fx1; //get fx data
@@ -570,6 +713,9 @@ void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, i
 					prevVol = -1;
 				}
 				output << "0x" << setfill('0') << setw(2) << noteNum << ", ";
+				if (channel == 4) {							//DPCM channel sample rate
+					output << "0x" << setfill('0') << setw(2) << dcpm << ", ";
+				}
 				emptyPattern = false;
 			}
 		}
@@ -651,7 +797,7 @@ void processEffect(ofstream& output, string fx, int* volume, int* prevVolume) {
 
 		z /= 625; //lowest binary fraction denomination with 4 bits is 0.0625
 		parameter = z;
-		output << "0x" << setfill('0') << setw(2) << static_cast<int>(parameter) << ", ";
+		output << "0x" << setfill('0') << setw(2) << static_cast <int>(parameter) << ", ";
 		break;
 	case 0xEC: //Bxx pattern jump
 		output << "0x" << setfill('0') << setw(2) << static_cast <int>(parameter) << ", ";
