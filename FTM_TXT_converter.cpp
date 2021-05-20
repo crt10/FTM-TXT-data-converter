@@ -123,7 +123,7 @@ void generatePulseVolumeTable(ofstream& output);
 void generateTNDVolumeTable(ofstream& output);
 
 int main() {
-	string fileName = "Corridors of Time.txt";
+	string fileName = "Touhou 13 - Desire Drive.txt";
 	ifstream file(fileName); //some .txt files won't read properly without, ios::binary
 	ofstream output(fileName.substr(0, fileName.size() - 4) + "_OUTPUT.txt", std::ofstream::out | std::ofstream::trunc);
 
@@ -665,6 +665,7 @@ void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, i
 		if (rows->at(row)->channels.at(channel)->volume != ".") { //get volume data
 			if (vol != -1) {
 				vol = stoi(rows->at(row)->channels.at(channel)->volume, NULL, 16);
+				emptyPattern = false;
 			}
 			else { //if the channel is silenced, only change the prevVol value. vol has to stay -1 in order to represent a silenced channel.
 				prevVol = stoi(rows->at(row)->channels.at(channel)->volume, NULL, 16);
