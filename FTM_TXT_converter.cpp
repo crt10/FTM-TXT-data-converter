@@ -597,7 +597,7 @@ int main() {
 
 int calculateTempo(int tempo) {
 	//formula for clock speed at: http://famitracker.com/wiki/index.php?title=Effect_Fxx
-	int clockSpeed = round(150 / 2.5);
+	int clockSpeed = round(tempo / 2.5);
 	int convertedSpeed = round((1.0 / (clockSpeed * 4.0)) * (32768.0 / 2.0));
 	return convertedSpeed;
 }
