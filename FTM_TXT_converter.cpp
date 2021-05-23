@@ -110,7 +110,7 @@ struct Pattern {
 	vector<Row*> rows;
 };
 
-int calculateTicksPerRow(int tempo, int speed);
+int calculateTempo(int tempo);
 void processRows(ofstream& output, vector<Row*>* rows, int channel, int speed, int numOfRows, int* prevVolume, int* volume, map<int, Instrument*>* instruments, int* prevInstrument, int* instrument, map<int, vector<DPCMKey*>*>* dpcmKeys);
 void processEffect(ofstream& output, string fx, int* volume, int* prevVolume);
 void calculateDelay(ofstream& output, int* delay);
@@ -348,7 +348,7 @@ int main() {
 				cout << "WARNING: More than " << MAX_ROWS << " rows per pattern. Rows above 255 will be ignored." << endl;
 			}
 			ss >> speed >> tempo >> data;
-			speed = calculateTicksPerRow(tempo, speed);
+			tempo = calculateTempo(tempo);
 			
 			//COLUMN DATA
 			getline(file, line);
@@ -482,7 +482,8 @@ int main() {
 			vector<int> channelsUsedPatterns[MAX_CHANNELS];
 
 			output << dec << "song" << songNumber << "_frames:" << endl; //song frames
-			output << hex << "\t.dw 0x" << setfill('0') << setw(4) << frames.size() * 10 + 2 << dec << endl; //song size
+			output << hex << "\t.dw 0x" << setfill('0') << setw(4) << frames.size() * 10 + 2; //song size
+			output << hex << ", 0x" << setfill('0') << setw(4) << tempo << dec << endl; //tempo
 			for (int frame = 0; frame < (MAX_FRAMES>frames.size() ? frames.size() : MAX_FRAMES); frame++) {
 				output << "\t.dw ";
 				for (int i = 0; i < MAX_CHANNELS; i++) {
@@ -594,12 +595,11 @@ int main() {
 	cout << "Process complete" << endl;
 }
 
-int calculateTicksPerRow(int tempo, int ticksPerRow) {
-	double multiplierTempo = (double)150 / tempo;
-	if (floor(multiplierTempo) != multiplierTempo) {
-		cout << "WARNING: Tempo does not divide evenly. Song BPM playback may be off. Read more at: http://famitracker.com/wiki/index.php?title=Effect_Fxx" << endl;
-	}
-	return multiplierTempo * ticksPerRow;
+int calculateTempo(int tempo) {
+	//formula for clock speed at: http://famitracker.com/wiki/index.php?title=Effect_Fxx
+	int clockSpeed = round(150 / 2.5);
+	int convertedSpeed = round((1.0 / (clockSpeed * 4.0)) * (32768.0 / 2.0));
+	return convertedSpeed;
 }
 
 void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, int numOfRows, int *prevVolume, int* volume, map<int, Instrument*>* instruments, int* prevInstrument, int* instrument, map<int, vector<DPCMKey*>*>* dpcmKeys) {
