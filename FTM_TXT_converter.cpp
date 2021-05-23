@@ -123,7 +123,7 @@ void generatePulseVolumeTable(ofstream& output);
 void generateTNDVolumeTable(ofstream& output);
 
 int main() {
-	string fileName = "Touhou 13 - Desire Drive.txt";
+	string fileName = "Corridors of Time.txt";
 	ifstream file(fileName); //some .txt files won't read properly without, ios::binary
 	ofstream output(fileName.substr(0, fileName.size() - 4) + "_OUTPUT.txt", std::ofstream::out | std::ofstream::trunc);
 
@@ -867,7 +867,7 @@ void calculateDelay(ofstream& output, int* delay) {
 	int rows = *delay;
 	if (rows != 0) {
 		rows += VOLUME_LEVELS::Fifteen; //delay levels must range between the highest volume level (0x66) and the instrument flag (0xE3)
-		for (rows; rows >= 0xE3; rows -= (0xE3 - VOLUME_LEVELS::Fifteen)) {
+		for (rows; rows >= 0xE3; rows -= (0xE2 - VOLUME_LEVELS::Fifteen)) {
 			output << "0xe2, ";
 		}
 		output << "0x" << setfill('0') << setw(2) << hex << rows << ", ";
