@@ -31,7 +31,7 @@ const unordered_map<string, int> NOISE_NOTES = {
 };
 
 const unordered_map<string, int> DPCM_NOTES = {
-	{"C-", 0}, {"C#", 1}, {"D-", 2}, {"D#", 3}, {"E-", 4}, {"F-", 5}, {"F#", 6}, {"G-", 7}, {"G#", 8}, {"A-", 9}, {"A#", 10}, {"B-0", 11},
+	{"C-", 0}, {"C#", 1}, {"D-", 2}, {"D#", 3}, {"E-", 4}, {"F-", 5}, {"F#", 6}, {"G-", 7}, {"G#", 8}, {"A-", 9}, {"A#", 10}, {"B-", 11},
 	{"..", -1},  {"--", -2}, {"==", -3}
 };
 
@@ -50,6 +50,8 @@ const double OLD_VIBRATO_DEPTH[16] = { 1.0, 1.0, 2.0, 3.0, 4.0, 7.0, 8.0, 15.0, 
 
 //https://wiki.nesdev.com/w/index.php/APU_Noise
 const int NOISE_PERIOD[16] = { 4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068 };
+//https://wiki.nesdev.com/w/index.php/APU_DMC
+const int DPCM_PERIOD[16] = { 428, 380, 340, 320, 286, 254, 226, 214, 190, 160, 142, 128, 106,  84,  72,  54 };
 
 const int MAX_DPCM = 255;
 const int MAX_INSTRUMENTS = 255;
@@ -118,12 +120,13 @@ int findMacroIndex(map<int, Macro*>* macros, Macro* macroTarget);
 void processMacros(ofstream& output, map<int, Macro*>* macros, int macroType);
 void generateNoteTable(ofstream& output);
 void generateNoisePeriodTable(ofstream& output);
+void generateDPCMPeriodTable(ofstream& output);
 void generateVibratoTable(ofstream& output);
 void generatePulseVolumeTable(ofstream& output);
 void generateTNDVolumeTable(ofstream& output);
 
 int main() {
-	string fileName = "Corridors of Time.txt";
+	string fileName = "City of Tears.txt";
 	ifstream file(fileName); //some .txt files won't read properly without, ios::binary
 	ofstream output(fileName.substr(0, fileName.size() - 4) + "_OUTPUT.txt", std::ofstream::out | std::ofstream::trunc);
 
@@ -134,6 +137,7 @@ int main() {
 
 	generateNoteTable(output);
 	generateNoisePeriodTable(output);
+	generateDPCMPeriodTable(output);
 	generateVibratoTable(output);
 	generatePulseVolumeTable(output);
 	generateTNDVolumeTable(output);
@@ -992,6 +996,20 @@ void generateNoisePeriodTable(ofstream& output) {
 	output << "noise_period_table: .dw ";
 	for (int i = 0; i < 16; i++) {
 		output << "0x" << setfill('0') << setw(4) << hex << (uint16_t)((NOISE_PERIOD[i]/2+1) * 11.1746014718);
+		if (i != 15) {
+			output << ", ";
+		}
+		else {
+			output << endl;
+		}
+	}
+	output << endl;
+}
+
+void generateDPCMPeriodTable(ofstream& output) {
+	output << "dpcm_period_table: .dw ";
+	for (int i = 0; i < 16; i++) {
+		output << "0x" << setfill('0') << setw(4) << hex << (uint16_t)((DPCM_PERIOD[i]/2+1) * 11.1746014718);
 		if (i != 15) {
 			output << ", ";
 		}
