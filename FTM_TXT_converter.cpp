@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <vector>
 #include <algorithm>
+#include <numeric>
 #include <iterator>
 using namespace std;
 
@@ -112,7 +113,7 @@ struct Pattern {
 	vector<Row*> rows;
 };
 
-int calculateTempo(int tempo);
+int calculateTempo(int* tempo);
 void processRows(ofstream& output, vector<Row*>* rows, int channel, int speed, int numOfRows, int* prevVolume, int* volume, map<int, Instrument*>* instruments, int* prevInstrument, int* instrument, map<int, vector<DPCMKey*>*>* dpcmKeys);
 void processEffect(ofstream& output, string fx, int* volume, int* prevVolume);
 void calculateDelay(ofstream& output, int* delay);
@@ -126,7 +127,7 @@ void generatePulseVolumeTable(ofstream& output);
 void generateTNDVolumeTable(ofstream& output);
 
 int main() {
-	string fileName = "City of Tears.txt";
+	string fileName = "Corridors of Time.txt";
 	ifstream file(fileName); //some .txt files won't read properly without, ios::binary
 	ofstream output(fileName.substr(0, fileName.size() - 4) + "_OUTPUT.txt", std::ofstream::out | std::ofstream::trunc);
 
@@ -198,12 +199,6 @@ int main() {
 		macro->values = values;
 		type->insert({ id, macro });
 	}
-
-	//int z = 0;
-	//for (auto x : volumeMacros) {
-	//	cout << z++ << ". ";
-	//	cout << x.first << " " << x.second->values.back() << endl;
-	//}
 
 	//READ AND STORE DPCM DATA
 	vector<DPCMSample*> dpcmSamples;
@@ -318,18 +313,10 @@ int main() {
 		}
 	}
 
-	//z = 0;
-	//for (auto x : instruments) {
-	//	cout << z++ << ". " << x.first;
-	//	if (x.second->volume != NULL) {
-	//		cout << " " << x.second->volume->values.back();
-	//	}
-	//	cout << endl;
-	//}
-
 	//TRACK DATA
 	int tempo;
 	int speed; //# of ticks per row in FTM
+	int cycleAdjust; //# of cycles to wait before adding an adjusting constant to keep frame counter consistent.
 	int songNumber = -1;
 
 	while (getline(file, line)) {
@@ -352,7 +339,7 @@ int main() {
 				cout << "WARNING: More than " << MAX_ROWS << " rows per pattern. Rows above 255 will be ignored." << endl;
 			}
 			ss >> speed >> tempo >> data;
-			tempo = calculateTempo(tempo);
+			cycleAdjust = calculateTempo(&tempo);
 			
 			//COLUMN DATA
 			getline(file, line);
@@ -396,11 +383,6 @@ int main() {
 					cout << "Warning: More than " << MAX_FRAMES << " frames detected for song " << songNumber << ". Extra frames will be ignored." << endl;
 				}
 			}
-
-			//z = 0;
-			//for (auto x : frames) {
-			//	cout << z++ << ". " << x->channel[4] << endl;
-			//}
 
 			//PATTERN DATA
 			unordered_map<int, Pattern*> patterns;
@@ -469,25 +451,13 @@ int main() {
 				}
 			}
 
-			//z = 0;
-			//for (auto x : patterns) {
-			//	cout << "Pattern " << z++ << endl;
-			//	int i = 0;
-			//	for (auto y : x->rows) {
-			//		cout << "Row " << i++ << ". ";
-			//		for (auto p : y->channels) {
-			//			cout << p->note;
-			//		}
-			//		cout << endl;
-			//	}
-			//}
-
 			//PROCESS ALL TRACK DATA FOR OUTPUT
 			vector<int> channelsUsedPatterns[MAX_CHANNELS];
 
 			output << dec << "song" << songNumber << "_frames:" << endl; //song frames
 			output << hex << "\t.dw 0x" << setfill('0') << setw(4) << frames.size() * 10 + 2; //song size
-			output << hex << ", 0x" << setfill('0') << setw(4) << tempo << dec << endl; //tempo
+			output << hex << ", 0x" << setfill('0') << setw(4) << tempo; //tempo
+			output << hex << ", 0x" << setfill('0') << setw(4) << cycleAdjust << dec << endl; //tempo
 			for (int frame = 0; frame < (MAX_FRAMES>frames.size() ? frames.size() : MAX_FRAMES); frame++) {
 				output << "\t.dw ";
 				for (int i = 0; i < MAX_CHANNELS; i++) {
@@ -599,11 +569,14 @@ int main() {
 	cout << "Process complete" << endl;
 }
 
-int calculateTempo(int tempo) {
+int calculateTempo(int* tempo) {
 	//formula for clock speed at: http://famitracker.com/wiki/index.php?title=Effect_Fxx
-	int clockSpeed = round(tempo / 2.5);
-	int convertedSpeed = round((1.0 / (clockSpeed * 4.0)) * (32768.0 / 2.0));
-	return convertedSpeed;
+	int clockSpeed = round(*tempo / 2.5);
+	*tempo = (1.0 / (clockSpeed * 4.0)) * (32768.0 / 2.0);
+	int denom = gcd((clockSpeed*4), (32768/2));
+	int cyclesPerAdjust = (clockSpeed*4) / denom;
+	int delayAdjust = (32768 / 2) / denom % cyclesPerAdjust;
+	return (cyclesPerAdjust << 8) | delayAdjust;
 }
 
 void processRows(ofstream &output, vector<Row*>* rows, int channel, int speed, int numOfRows, int *prevVolume, int* volume, map<int, Instrument*>* instruments, int* prevInstrument, int* instrument, map<int, vector<DPCMKey*>*>* dpcmKeys) {
